@@ -54,14 +54,20 @@ export class Building extends Entity {
   type: BType;
   _flash: number = 0;
   rallyPoint: { x: number; y: number } | null = null;
+  /** 0 = just placed, 1 = fully built. Starts at 1 for prebuilt map buildings. */
+  buildPct: number = 0;
+  private _buildNotified = false;
 
-  constructor(cx: number, cy: number, type: BType, team: Team = 'player') {
+  get isReady() { return this.buildPct >= 1; }
+
+  constructor(cx: number, cy: number, type: BType, team: Team = 'player', prebuilt = false) {
     const d = BDEF[type];
     super(team, d.hp);
     this.type = type;
     this.w = d.w; this.h = d.h;
     this.x = cx - d.w / 2;
     this.y = cy - d.h / 2;
+    if (prebuilt || d.buildTime === 0) this.buildPct = 1;
   }
 
   get cx() { return this.x + this.w / 2; }
@@ -78,6 +84,15 @@ export class Building extends Entity {
 
   update(dt: number, _targets: Entity[], _proj: Projectile[]) {
     if (this._flash > 0) this._flash -= dt;
+    if (this.buildPct < 1) {
+      const bt = BDEF[this.type].buildTime;
+      if (bt > 0) this.buildPct = Math.min(1, this.buildPct + dt / bt);
+      if (this.buildPct >= 1 && !this._buildNotified) {
+        this._buildNotified = true;
+        // Engine listens for this flag and plays sound + recalcs power
+        (this as any)._justCompleted = true;
+      }
+    }
   }
 
   draw(ctx: CanvasRenderingContext2D) {
@@ -252,6 +267,40 @@ export class Building extends Entity {
     // Type label
     ctx.fillStyle='rgba(255,255,255,0.75)'; ctx.font='bold 7px "Courier New"'; ctx.textAlign='center';
     ctx.fillText(this.type.toUpperCase(),this.cx,this.cy+3); ctx.textAlign='left';
+
+    // ── Under-construction scaffold overlay ──────────────────
+    if (this.buildPct < 1) {
+      // Semi-transparent dark veil (reveals partial structure beneath)
+      ctx.fillStyle=`rgba(0,0,0,${0.55 - this.buildPct*0.45})`;
+      ctx.fillRect(x, y, w, h);
+      // Diagonal scaffold stripes
+      ctx.save();
+      ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+      ctx.strokeStyle='rgba(255,200,40,0.35)'; ctx.lineWidth=4;
+      for (let i = -(w+h); i < (w+h); i += 14) {
+        ctx.beginPath();
+        ctx.moveTo(x + i, y);
+        ctx.lineTo(x + i + h, y + h);
+        ctx.stroke();
+      }
+      ctx.restore();
+      // Scaffold poles (corners + midpoints)
+      ctx.fillStyle='rgba(200,160,40,0.7)';
+      ctx.fillRect(x-2,    y-2,    4, h+4);  // left
+      ctx.fillRect(x+w-2,  y-2,    4, h+4);  // right
+      ctx.fillRect(x-2,    y-2,    w+4, 4);  // top
+      ctx.fillRect(x-2,    y+h-2,  w+4, 4);  // bottom
+      // Progress bar (yellow fill inside black track)
+      const bw = w + 4, bh = 6, bx = x - 2, by = y - 14;
+      ctx.fillStyle='rgba(0,0,0,0.65)'; ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle='#FFD700';           ctx.fillRect(bx, by, bw * this.buildPct, bh);
+      ctx.strokeStyle='rgba(255,200,0,0.5)'; ctx.lineWidth=1; ctx.strokeRect(bx, by, bw, bh);
+      // "BUILDING..." label
+      ctx.fillStyle='#FFD700'; ctx.font='bold 6px "Courier New"'; ctx.textAlign='center';
+      ctx.fillText('BUILDING…', this.cx, by - 2);
+      ctx.textAlign = 'left';
+    }
+
     drawHpBar(ctx,this.cx,this.y-12,this.w+4,this.hp,this.maxHp);
   }
 }
@@ -441,6 +490,24 @@ export class Turret extends Building {
       const bCol=this.variant==='anti-infantry'?'#22FF66':'#FF8800';
       ctx.fillStyle=bCol; ctx.font='bold 6px "Courier New"'; ctx.textAlign='center';
       ctx.fillText(badge,this.cx,y+h+10); ctx.textAlign='left';
+    }
+
+    // ── Under-construction scaffold (same as Building) ───────────
+    if (this.buildPct < 1) {
+      ctx.fillStyle=`rgba(0,0,0,${0.55 - this.buildPct*0.45})`; ctx.fillRect(x,y,w,h);
+      ctx.save(); ctx.beginPath(); ctx.rect(x,y,w,h); ctx.clip();
+      ctx.strokeStyle='rgba(255,200,40,0.35)'; ctx.lineWidth=4;
+      for(let i=-(w+h);i<(w+h);i+=14){ctx.beginPath();ctx.moveTo(x+i,y);ctx.lineTo(x+i+h,y+h);ctx.stroke();}
+      ctx.restore();
+      ctx.fillStyle='rgba(200,160,40,0.7)';
+      ctx.fillRect(x-2,y-2,4,h+4); ctx.fillRect(x+w-2,y-2,4,h+4);
+      ctx.fillRect(x-2,y-2,w+4,4); ctx.fillRect(x-2,y+h-2,w+4,4);
+      const bw=w+4,bh=6,bx=x-2,by=y-16;
+      ctx.fillStyle='rgba(0,0,0,0.65)'; ctx.fillRect(bx,by,bw,bh);
+      ctx.fillStyle='#FFD700'; ctx.fillRect(bx,by,bw*this.buildPct,bh);
+      ctx.strokeStyle='rgba(255,200,0,0.5)'; ctx.lineWidth=1; ctx.strokeRect(bx,by,bw,bh);
+      ctx.fillStyle='#FFD700'; ctx.font='bold 6px "Courier New"'; ctx.textAlign='center';
+      ctx.fillText('BUILDING…',this.cx,by-2); ctx.textAlign='left';
     }
 
     drawHpBar(ctx,this.cx,this.y-13,this.w+6,this.hp,this.maxHp);

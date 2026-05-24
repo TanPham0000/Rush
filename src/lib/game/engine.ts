@@ -178,20 +178,20 @@ export class Engine {
     if (isSurvival && md.preBuilt) {
       // ── BEACH DEFENCE — chaos under fire, dawn invasion feel ──
       // HQ + Economy (slightly inland, safe for now)
-      this.buildings.push(new Building(pb.cx,      pb.cy,       'Construction Yard','player'));
-      this.buildings.push(new Building(pb.cx+160,  pb.cy-210,   'Power Plant',      'player'));
-      this.buildings.push(new Building(pb.cx+160,  pb.cy+210,   'Power Plant',      'player'));
-      this.buildings.push(new Building(pb.cx+160,  pb.cy-60,    'Refinery',         'player'));
-      this.buildings.push(new Building(pb.cx+160,  pb.cy+60,    'Refinery',         'player'));
-      this.buildings.push(new Building(pb.cx+320,  pb.cy,       'Barracks',         'player'));
-      this.buildings.push(new Building(pb.cx+320,  pb.cy+170,   'War Factory',      'player'));
+      this.buildings.push(new Building(pb.cx,      pb.cy,       'Construction Yard','player',true));
+      this.buildings.push(new Building(pb.cx+160,  pb.cy-210,   'Power Plant',      'player',true));
+      this.buildings.push(new Building(pb.cx+160,  pb.cy+210,   'Power Plant',      'player',true));
+      this.buildings.push(new Building(pb.cx+160,  pb.cy-60,    'Refinery',         'player',true));
+      this.buildings.push(new Building(pb.cx+160,  pb.cy+60,    'Refinery',         'player',true));
+      this.buildings.push(new Building(pb.cx+320,  pb.cy,       'Barracks',         'player',true));
+      this.buildings.push(new Building(pb.cx+320,  pb.cy+170,   'War Factory',      'player',true));
       // Only 2 turrets — manned positions, barely holding the line
       const turretSpots=[
         [960, 600],  // centre-road chokepoint
         [950, 200],  // northern sandbag emplacement
       ];
       for(const[tx,ty] of turretSpots){
-        const t=new Turret(tx,ty,'player'); this.buildings.push(t);
+        const t=new Turret(tx,ty,'player'); t.buildPct=1; this.buildings.push(t);
       }
       // Infantry scattered at the seawall / forward positions — scramble mode
       // Mix of Infantry and one Grenadier for variety
@@ -207,18 +207,18 @@ export class Engine {
       const gren=new Grenadier(960,600,'player'); gren._game=this._ref; this.pUnits.push(gren);
     } else {
       // ── STANDARD maps — minimal starting base ─────────────
-      this.buildings.push(new Building(pb.cx,pb.cy,'Construction Yard','player'));
-      this.buildings.push(new Building(pb.cx+140,pb.cy+170,'Power Plant','player'));
-      this.buildings.push(new Building(pb.cx+140,pb.cy-170,'Refinery','player'));
+      this.buildings.push(new Building(pb.cx,pb.cy,'Construction Yard','player',true));
+      this.buildings.push(new Building(pb.cx+140,pb.cy+170,'Power Plant','player',true));
+      this.buildings.push(new Building(pb.cx+140,pb.cy-170,'Refinery','player',true));
 
       // Enemy base
-      this.buildings.push(new Building(eb.cx,eb.cy,'War Factory','enemy'));
+      this.buildings.push(new Building(eb.cx,eb.cy,'War Factory','enemy',true));
       const turretPositions=[[0,-150],[0,160],[-80,-270],[-80,280]];
       for(const[dx,dy] of turretPositions){
-        const et=new Turret(eb.cx+dx,eb.cy+dy,'enemy'); et.disabled=false; this.buildings.push(et);
+        const et=new Turret(eb.cx+dx,eb.cy+dy,'enemy'); et.buildPct=1; et.disabled=false; this.buildings.push(et);
       }
       if(md.theme===2){
-        const et2=new Turret(eb.cx-200,eb.cy,'enemy'); et2.disabled=false; this.buildings.push(et2);
+        const et2=new Turret(eb.cx-200,eb.cy,'enemy'); et2.buildPct=1; et2.disabled=false; this.buildings.push(et2);
       }
     }
 
@@ -260,7 +260,7 @@ export class Engine {
   _recalcPower(){
     let gen=0,used=0;
     for(const b of this.buildings){
-      if(b.team!=='player')continue;
+      if(b.team!=='player'||!b.isReady)continue;
       const p=BDEF[b.type].power;
       if(p>0)gen+=p;else used+=Math.abs(p);
     }
@@ -492,6 +492,7 @@ export class Engine {
     if(this._credits<cost)return this.setStatus('Not enough credits!','error');
     const brk=this._selected.find(e=>e instanceof Building&&e.type===bType&&e.team==='player') as Building|undefined;
     if(!brk)return this.setStatus(`Select a ${bType} first!`,'warn');
+    if(!brk.isReady)return this.setStatus('Building still under construction!','warn');
     const queue=this._queues.get(brk.id)??[];
     if(queue.length>=5)return this.setStatus('Queue full!','warn');
     this._credits-=cost;
@@ -757,7 +758,16 @@ export class Engine {
     // Buildings
     const eTgts:Entity[]=[...this.eUnits,...this.buildings.filter(b=>b.team==='enemy')];
     const pTgts:Entity[]=[...this.pUnits,...this.buildings.filter(b=>b.team==='player')];
-    for(const b of this.buildings) b.update(dt,b.team==='player'?eTgts:pTgts,this.projectiles);
+    for(const b of this.buildings){
+      b.update(dt,b.team==='player'?eTgts:pTgts,this.projectiles);
+      // Construction complete
+      if((b as any)._justCompleted){
+        (b as any)._justCompleted=false;
+        sound.buildPlace();
+        this._recalcPower();
+        this._flashMsgs.push({text:`${b.type} READY`,x:b.cx,y:b.y-16,t:2,maxT:2,color:C.allyLight});
+      }
+    }
     for(const e of this.eUnits) e.update(dt,allUnits,this.projectiles);
 
     this._tickQueues(dt);
@@ -956,6 +966,13 @@ export class Engine {
       if(cx>riverX-64&&cx<riverX+64)return false;
     }
     if(this._mapDef.theme===2&&this.terrain.inCityBlock(cx,cy))return false;
+    // ── Power-zone check: must be within range of a ready CY or Power Plant ──
+    const inPowerZone=this.buildings.some(b=>{
+      if(b.team!=='player'||!b.isReady)return false;
+      const r=BDEF[b.type].buildRadius;
+      return r>0 && hypot(cx,cy,b.cx,b.cy)<=r;
+    });
+    if(!inPowerZone)return false;
     return true;
   }
 
@@ -1101,6 +1118,17 @@ export class Engine {
 
     if(this._buildMode){
       ctx.setTransform(zoom,0,0,zoom,-camX*zoom,-camY*zoom);
+      // ── Power zone rings ────────────────────────────────────
+      for(const b of this.buildings){
+        if(b.team!=='player'||!b.isReady)continue;
+        const zr=BDEF[b.type].buildRadius;
+        if(zr<=0)continue;
+        ctx.beginPath(); ctx.arc(b.cx,b.cy,zr,0,Math.PI*2);
+        ctx.strokeStyle='rgba(80,180,255,0.28)'; ctx.lineWidth=1.5/zoom; ctx.setLineDash([8,6]);
+        ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle='rgba(60,140,255,0.05)'; ctx.fill();
+      }
+      // ── Ghost building ──────────────────────────────────────
       const d=BDEF[this._buildMode], mx=mouseWorld.x-d.w/2, my=mouseWorld.y-d.h/2;
       const valid=this._isValidBuildPos(mouseWorld.x,mouseWorld.y);
       ctx.fillStyle=valid?'rgba(80,150,255,0.22)':'rgba(255,50,50,0.22)'; ctx.fillRect(mx,my,d.w,d.h);

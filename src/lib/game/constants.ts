@@ -38,13 +38,15 @@ export const C = {
 export type BType = keyof typeof BDEF;
 
 export const BDEF = {
-  'Construction Yard': { w: 80, h: 68, hp: 1200, power:  5, cost:   0 },
-  'Barracks':          { w: 64, h: 56, hp:  600, power: -5, cost: 300 },
-  'Refinery':          { w: 72, h: 62, hp:  700, power:-10, cost: 500 },
-  'Power Plant':       { w: 60, h: 52, hp:  500, power: 20, cost: 200 },
-  'Turret':            { w: 36, h: 36, hp:  400, power: -5, cost: 350 },
-  'War Factory':       { w: 88, h: 72, hp: 2200, power:  0, cost: 700 },
-  'Tech Lab':          { w: 72, h: 60, hp:  800, power: -8, cost: 600 },
+  //                                                                     buildRadius = grid anchor range (0 = must be near an anchor)
+  //                                                                     buildTime   = seconds to construct
+  'Construction Yard': { w: 80, h: 68, hp: 1200, power:  5, cost:   0, buildRadius: 320, buildTime:  0 },
+  'Power Plant':       { w: 60, h: 52, hp:  500, power: 20, cost: 200, buildRadius: 360, buildTime: 22 },
+  'Barracks':          { w: 64, h: 56, hp:  600, power: -5, cost: 300, buildRadius:   0, buildTime: 28 },
+  'Refinery':          { w: 72, h: 62, hp:  700, power:-10, cost: 500, buildRadius:   0, buildTime: 32 },
+  'Turret':            { w: 36, h: 36, hp:  400, power: -5, cost: 350, buildRadius:   0, buildTime: 16 },
+  'War Factory':       { w: 88, h: 72, hp: 2200, power:  0, cost: 700, buildRadius:   0, buildTime: 40 },
+  'Tech Lab':          { w: 72, h: 60, hp:  800, power: -8, cost: 600, buildRadius:   0, buildTime: 36 },
 } as const;
 
 // ── TRAINING TIMES (seconds) ─────────────────────────────────
