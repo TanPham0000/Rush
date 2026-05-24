@@ -6,6 +6,7 @@
     selected, buildMode, statusMsg,
     selHasBarracks, selHasRefinery, selHasWarFactory, selHasUnits,
     hasTechLab, hasWarFactory, selHasTechLab,
+    selHasTurret, selTurretVariant,
     warFactoryHp, warFactoryMaxHp,
     enemiesKilled, unitsLost,
     selBuildingQueue, captureNodesState, holdProgress,
@@ -233,6 +234,30 @@
   </div>
   {/if}
 
+  <!-- Turret upgrade panel -->
+  {#if $selHasTurret && $hasTechLab}
+  <div class="section turret-upg-section">
+    <div class="section-label">TURRET UPGRADE · requires Tech Lab</div>
+    {#if $selTurretVariant === 'standard'}
+    <button class="btn full ai-turret-btn" disabled={$credits<250||$gameState!=='playing'}
+      onclick={() => engine?.upgradeTurret('anti-infantry')}
+      style="margin-bottom:3px">
+      <span class="bn">⚡ Anti-Infantry</span>
+      <span class="bc">250¢ · dual cannons · ×0.28 vs armour</span>
+    </button>
+    <button class="btn full at-turret-btn" disabled={$credits<350||$gameState!=='playing'}
+      onclick={() => engine?.upgradeTurret('anti-tank')}>
+      <span class="bn">💥 Anti-Tank</span>
+      <span class="bc">350¢ · heavy cannon · ×1.65 vs armour</span>
+    </button>
+    {:else}
+    <div class="req-note">
+      {$selTurretVariant === 'anti-infantry' ? '⚡ ANTI-INFANTRY — dual autocannons active' : '💥 ANTI-TANK — heavy cannon active'}
+    </div>
+    {/if}
+  </div>
+  {/if}
+
   <!-- Build queue display -->
   {#if $selBuildingQueue.head !== null || $selBuildingQueue.rest.length > 0}
   <div class="section queue-section">
@@ -453,6 +478,12 @@
   .upg-btn  { background:#0D2020; border-color:#1E5040; font-size:8px; }
   .upg-btn:hover:not(:disabled) { background:#153830; border-color:#44AA88; }
   .upg-btn.done { opacity:0.5; background:#0A1A10; border-color:#1A3A28; }
+  .turret-upg-section { background:#0A1A14; border-color:#1A4A30; }
+  .turret-upg-section .section-label { color:#44CC88; }
+  .ai-turret-btn { background:#0A1F0A; border-color:#1A5A22; color:#66FF88; }
+  .ai-turret-btn:hover:not(:disabled) { background:#112A12; border-color:#33AA44; }
+  .at-turret-btn { background:#1A1008; border-color:#5A3010; color:#FF9944; }
+  .at-turret-btn:hover:not(:disabled) { background:#261812; border-color:#AA6622; }
   .bm-section { background:#0E0D08; border-color:#3A3010; }
   .bm-section .section-label { color:#AA9930; }
   .bm-btn { background:#1A1500; border-color:#6A5800; color:#FFD700; }

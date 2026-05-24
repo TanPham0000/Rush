@@ -40,6 +40,8 @@ export const hasRefinery      = writable(false);
 export const hasTechLab       = writable(false);
 export const hasWarFactory    = writable(false);
 export const selHasTechLab    = writable(false);
+export const selHasTurret     = writable(false);
+export const selTurretVariant = writable<string>('standard'); // 'standard'|'anti-infantry'|'anti-tank'
 
 // ── Pause ─────────────────────────────────────────────────────
 export const paused = writable(false);

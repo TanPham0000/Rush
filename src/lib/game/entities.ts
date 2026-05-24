@@ -87,63 +87,148 @@ export class Building extends Entity {
     const accent = pl ? C.allyAccent : C.enemyAccent;
     const { x, y, w, h } = this;
 
-    ctx.shadowColor = pl ? 'rgba(68,170,255,0.95)' : 'rgba(220,40,40,0.95)';
-    ctx.shadowBlur  = this.selected ? 32 : 16;
-    ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(x+5,y+5,w,h);
+    // Selection glow
+    ctx.shadowColor = pl ? 'rgba(68,170,255,0.9)' : 'rgba(220,40,40,0.9)';
+    ctx.shadowBlur  = this.selected ? 28 : 14;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(x+5,y+5,w,h);
     ctx.shadowBlur = 0;
+
+    // Main body
     ctx.fillStyle = base; ctx.fillRect(x,y,w,h);
-    ctx.fillStyle = pl ? C.allyChr : C.enemyLight; ctx.globalAlpha=0.18;
-    ctx.fillRect(x,y,w,3); ctx.fillRect(x,y,3,h); ctx.globalAlpha=1;
+    // Bevel highlight (top-left)
+    ctx.fillStyle = 'rgba(255,255,255,0.10)'; ctx.fillRect(x,y,w,3); ctx.fillRect(x,y,3,h);
+    // Inner panel
     ctx.fillStyle = dark; ctx.fillRect(x+4,y+4,w-8,h-8);
-    ctx.strokeStyle = pl ? 'rgba(68,170,255,0.35)' : 'rgba(255,85,34,0.35)';
+    ctx.strokeStyle = pl?'rgba(68,170,255,0.3)':'rgba(255,85,34,0.3)';
     ctx.lineWidth=1; ctx.strokeRect(x+4,y+4,w-8,h-8);
     ctx.fillStyle = accent;
 
     if (this.type === 'Construction Yard') {
-      ctx.fillRect(x+8,y+8,16,16); ctx.fillRect(x+w-24,y+8,16,16);
-      ctx.fillRect(this.cx-1,y+4,2,h-8); ctx.fillRect(x+4,this.cy-1,w-8,2);
-      ctx.strokeStyle=C.allyGold; ctx.lineWidth=2;
-      ctx.beginPath(); ctx.moveTo(this.cx,this.cy-4); ctx.lineTo(this.cx+14,this.cy-14); ctx.lineTo(this.cx+14,this.cy+8); ctx.stroke();
-    } else if (this.type === 'Barracks') {
-      ctx.fillRect(x+6,y+8,12,12); ctx.fillRect(x+w-18,y+8,12,12);
-      ctx.fillStyle='#000'; ctx.fillRect(this.cx-8,y+h-16,16,16);
-      ctx.fillStyle=C.allyGold; ctx.font='8px sans-serif'; ctx.textAlign='center';
-      ctx.fillText('★',this.cx,this.cy+3); ctx.textAlign='left';
-    } else if (this.type === 'Refinery') {
-      ctx.beginPath(); ctx.arc(x+14,y+14,9,0,Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(x+w-14,y+14,9,0,Math.PI*2); ctx.fill();
-      ctx.fillStyle=dark; ctx.fillRect(this.cx-2,y+8,4,h-14);
-      ctx.fillStyle=C.tibGreen; ctx.beginPath(); ctx.arc(this.cx,y+h-12,9,0,Math.PI*2); ctx.fill();
-    } else if (this.type === 'Power Plant') {
-      const rings=[12,8,5];
-      for(let i=0;i<rings.length;i++){
-        ctx.beginPath(); ctx.arc(this.cx,this.cy,rings[i],0,Math.PI*2);
-        ctx.strokeStyle=`rgba(255,${200-i*40},0,${0.9-i*0.2})`; ctx.lineWidth=3-i; ctx.stroke();
-      }
-      ctx.fillStyle='#FFD700'; ctx.beginPath();
-      ctx.moveTo(this.cx+4,y+8); ctx.lineTo(this.cx-5,this.cy+2); ctx.lineTo(this.cx+2,this.cy+2);
-      ctx.lineTo(this.cx-4,y+h-8); ctx.lineTo(this.cx+5,this.cy-2); ctx.lineTo(this.cx-2,this.cy-2);
-      ctx.closePath(); ctx.fill();
-    } else if (this.type === 'Tech Lab') {
+      // Radar dish + command arrays
+      ctx.fillStyle=accent;
+      ctx.fillRect(x+7,y+7,14,14); ctx.fillRect(x+w-21,y+7,14,14); // corner towers
+      // Crosshair lines
       ctx.strokeStyle=accent; ctx.lineWidth=1.5;
       ctx.beginPath();
-      ctx.moveTo(x+10,y+12); ctx.lineTo(x+w-10,y+12);
-      ctx.moveTo(x+10,this.cy); ctx.lineTo(x+w-10,this.cy);
-      ctx.moveTo(x+10,y+h-12); ctx.lineTo(x+w-10,y+h-12);
-      ctx.moveTo(x+16,y+12); ctx.lineTo(x+16,y+h-12);
-      ctx.moveTo(x+w-16,y+12); ctx.lineTo(x+w-16,y+h-12); ctx.stroke();
-      ctx.fillStyle=accent; ctx.fillRect(this.cx-8,this.cy-8,16,16);
-      ctx.fillStyle=dark; ctx.fillRect(this.cx-5,this.cy-5,10,10);
-      ctx.beginPath(); ctx.arc(this.cx,this.cy,3,0,Math.PI*2); ctx.fillStyle=C.allyGold; ctx.fill();
-    } else if (this.type === 'War Factory') {
+      ctx.moveTo(this.cx,y+5); ctx.lineTo(this.cx,y+h-5);
+      ctx.moveTo(x+5,this.cy); ctx.lineTo(x+w-5,this.cy);
+      ctx.stroke();
+      // Rotating radar dish arm (static representation)
+      ctx.strokeStyle=C.allyGold; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(this.cx,this.cy-4);
+      ctx.lineTo(this.cx+16,this.cy-16); ctx.lineTo(this.cx+16,this.cy+6); ctx.stroke();
+      // Dish circle
+      ctx.beginPath(); ctx.arc(this.cx+16,this.cy-5,5,0,Math.PI*2);
+      ctx.strokeStyle=C.allyGold; ctx.lineWidth=1.5; ctx.stroke();
+      // Control centre windows
+      ctx.fillStyle='rgba(100,200,255,0.45)';
+      ctx.fillRect(x+8,y+h-18,18,10); ctx.fillRect(x+w-26,y+h-18,18,10);
+
+    } else if (this.type === 'Barracks') {
+      // Military barracks — rows of bunks / windows
+      ctx.fillStyle='rgba(100,200,255,0.35)';
+      // Windows row
+      for(let i=0;i<3;i++) ctx.fillRect(x+7+i*14,y+8,10,8);
+      // Entrance door
+      ctx.fillStyle=dark; ctx.fillRect(this.cx-7,y+h-16,14,16);
+      ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(this.cx-5,y+h-14,10,14);
+      // Flagpole
+      ctx.strokeStyle=accent; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(x+w-10,y+h-4); ctx.lineTo(x+w-10,y+2); ctx.stroke();
+      // Flag
+      ctx.fillStyle=C.allyGold;
+      ctx.beginPath(); ctx.moveTo(x+w-10,y+3); ctx.lineTo(x+w-10,y+11);
+      ctx.lineTo(x+w-2,y+7); ctx.closePath(); ctx.fill();
+      // Star emblem
+      ctx.fillStyle=C.allyGold; ctx.font='bold 9px sans-serif'; ctx.textAlign='center';
+      ctx.fillText('★',this.cx,this.cy+3); ctx.textAlign='left';
+
+    } else if (this.type === 'Refinery') {
+      // Processing dome + inlet pipes
       ctx.fillStyle=accent;
-      ctx.fillRect(x+6,y+6,22,22); ctx.fillRect(x+w-28,y+6,22,22); ctx.fillRect(x+8,y+h-22,w-16,16);
-      ctx.fillStyle='#FF0000'; ctx.beginPath(); ctx.arc(this.cx,this.cy-6,11,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x+13,y+13,8,0,Math.PI*2); ctx.fill(); // corner silos
+      ctx.beginPath(); ctx.arc(x+w-13,y+13,8,0,Math.PI*2); ctx.fill();
+      // Main processing tube (vertical)
+      ctx.fillStyle=dark; ctx.fillRect(this.cx-3,y+6,6,h-10);
+      ctx.strokeStyle=accent; ctx.lineWidth=1; ctx.strokeRect(this.cx-3,y+6,6,h-10);
+      // Tiberium inlet dome (glowing green)
+      const tib=ctx.createRadialGradient(this.cx,y+h-10,0,this.cx,y+h-10,10);
+      tib.addColorStop(0,C.tibGreen); tib.addColorStop(1,'rgba(0,200,60,0)');
+      ctx.fillStyle=tib; ctx.beginPath(); ctx.arc(this.cx,y+h-10,10,0,Math.PI*2); ctx.fill();
+      // Pipe connections
+      ctx.strokeStyle=dark; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.moveTo(x+13,y+h-13); ctx.lineTo(this.cx-3,y+h-13); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x+w-13,y+h-13); ctx.lineTo(this.cx+3,y+h-13); ctx.stroke();
+
+    } else if (this.type === 'Power Plant') {
+      // Cooling fins on sides
       ctx.fillStyle=dark;
-      ctx.beginPath(); ctx.arc(this.cx-4,this.cy-8,3,0,Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(this.cx+4,this.cy-8,3,0,Math.PI*2); ctx.fill();
-      ctx.fillRect(this.cx-7,this.cy-1,5,6); ctx.fillRect(this.cx+2,this.cy-1,5,6);
-      if (this.hp < this.maxHp) {
+      for(let i=0;i<3;i++){
+        ctx.fillRect(x-4,y+8+i*13,4,9);   // left fins
+        ctx.fillRect(x+w,y+8+i*13,4,9);   // right fins
+      }
+      // Reactor core rings (concentric animated-looking circles)
+      const rCol=['rgba(255,200,0,0.9)','rgba(255,150,0,0.65)','rgba(255,80,0,0.35)'];
+      for(let i=0;i<3;i++){
+        ctx.beginPath(); ctx.arc(this.cx,this.cy,[12,9,6][i],0,Math.PI*2);
+        ctx.strokeStyle=rCol[i]; ctx.lineWidth=3-i; ctx.stroke();
+      }
+      // Lightning bolt
+      ctx.fillStyle='#FFD700';
+      ctx.beginPath();
+      ctx.moveTo(this.cx+3,y+8); ctx.lineTo(this.cx-6,this.cy+3);
+      ctx.lineTo(this.cx+1,this.cy+3); ctx.lineTo(this.cx-3,y+h-8);
+      ctx.lineTo(this.cx+6,this.cy-3); ctx.lineTo(this.cx-1,this.cy-3);
+      ctx.closePath(); ctx.fill();
+      // Vent grills
+      ctx.strokeStyle='rgba(0,0,0,0.5)'; ctx.lineWidth=1;
+      for(let i=0;i<4;i++){ ctx.beginPath(); ctx.moveTo(x+5,y+h-16+i*3); ctx.lineTo(x+w-5,y+h-16+i*3); ctx.stroke(); }
+
+    } else if (this.type === 'Tech Lab') {
+      // Antenna array + science windows
+      ctx.strokeStyle=accent; ctx.lineWidth=1.5;
+      // Panel grid (scan lines)
+      for(let gy=y+10;gy<y+h-8;gy+=8){ ctx.beginPath(); ctx.moveTo(x+6,gy); ctx.lineTo(x+w-6,gy); ctx.stroke(); }
+      for(let gx=x+12;gx<x+w-10;gx+=12){ ctx.beginPath(); ctx.moveTo(gx,y+6); ctx.lineTo(gx,y+h-6); ctx.stroke(); }
+      // Antenna tower
+      ctx.strokeStyle=accent; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(x+w-8,y+h-4); ctx.lineTo(x+w-8,y-12); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x+w-18,y-8); ctx.lineTo(x+w+2,y-8); ctx.stroke(); // crossbar
+      // Central computer terminal
+      ctx.fillStyle=accent; ctx.fillRect(this.cx-10,this.cy-10,20,20);
+      ctx.fillStyle=dark; ctx.fillRect(this.cx-7,this.cy-7,14,14);
+      // Scan dot
+      ctx.beginPath(); ctx.arc(this.cx,this.cy,3.5,0,Math.PI*2);
+      ctx.fillStyle=C.allyGold; ctx.fill();
+      // Dish at corner
+      ctx.strokeStyle=accent; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.arc(x+9,y+9,7,-Math.PI*0.8,Math.PI*0.1); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x+9,y+9); ctx.lineTo(x+13,y+6); ctx.stroke();
+
+    } else if (this.type === 'War Factory') {
+      // Large industrial complex — factory floor + gantry crane
+      ctx.fillStyle=accent;
+      // Corner towers / smokestacks
+      ctx.fillRect(x+4,y+4,16,18); ctx.fillRect(x+w-20,y+4,16,18);
+      // Factory floor entrance (big horizontal door)
+      ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(x+6,y+h-22,w-12,18);
+      ctx.strokeStyle=dark; ctx.lineWidth=1; ctx.strokeRect(x+6,y+h-22,w-12,18);
+      // Gantry crane arm
+      ctx.strokeStyle=accent; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(x+8,y+h-22); ctx.lineTo(x+w-8,y+h-22); ctx.stroke(); // crane rail
+      ctx.beginPath(); ctx.moveTo(this.cx+6,y+h-22); ctx.lineTo(this.cx+6,y+h-10); ctx.stroke(); // hoist
+      // Smokestack emissions (small circles)
+      ctx.fillStyle='rgba(100,100,100,0.3)';
+      ctx.beginPath(); ctx.arc(x+12,y-2,4,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x+w-12,y-2,5,0,Math.PI*2); ctx.fill();
+      // Factory badge
+      ctx.fillStyle='#FF0000'; ctx.beginPath(); ctx.arc(this.cx,this.cy-5,9,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle=dark;
+      ctx.beginPath(); ctx.arc(this.cx-3,this.cy-7,2.5,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(this.cx+3,this.cy-7,2.5,0,Math.PI*2); ctx.fill();
+      ctx.fillRect(this.cx-6,this.cy-1,4,5); ctx.fillRect(this.cx+2,this.cy-1,4,5);
+      // HP bar for enemy war factory
+      if (this.team==='enemy'&&this.hp < this.maxHp) {
         const pct=this.hp/this.maxHp, bx=x+6, bw=w-12;
         ctx.fillStyle='#111'; ctx.fillRect(bx,y+h+2,bw,5);
         ctx.fillStyle=pct>0.5?'#FF4400':'#FF0000'; ctx.fillRect(bx,y+h+2,bw*pct,5);
@@ -164,7 +249,8 @@ export class Building extends Entity {
         ctx.lineTo(this.rallyPoint.x+10,this.rallyPoint.y-8); ctx.lineTo(this.rallyPoint.x,this.rallyPoint.y-4); ctx.fill();
       }
     }
-    ctx.fillStyle='rgba(255,255,255,0.8)'; ctx.font='bold 7px "Courier New"'; ctx.textAlign='center';
+    // Type label
+    ctx.fillStyle='rgba(255,255,255,0.75)'; ctx.font='bold 7px "Courier New"'; ctx.textAlign='center';
     ctx.fillText(this.type.toUpperCase(),this.cx,this.cy+3); ctx.textAlign='left';
     drawHpBar(ctx,this.cx,this.y-12,this.w+4,this.hp,this.maxHp);
   }
@@ -173,6 +259,8 @@ export class Building extends Entity {
 // ═══════════════════════════════════════════════════════════════
 // TURRET
 // ═══════════════════════════════════════════════════════════════
+export type TurretVariant = 'standard' | 'anti-infantry' | 'anti-tank';
+
 export class Turret extends Building {
   atkDmg   = 32;
   atkRange = 175;
@@ -180,12 +268,38 @@ export class Turret extends Building {
   atkCd    = 0;
   atkTarget: Entity | null = null;
   barrel   = -Math.PI / 2;
+  barrel2  = -Math.PI / 2;   // second barrel offset for AI variant
   disabled = false;
   projColor: string;
+  variant:  TurretVariant = 'standard';
 
   constructor(cx: number, cy: number, team: Team = 'player') {
     super(cx, cy, 'Turret', team);
     this.projColor = team==='player' ? C.allyLight : C.enemyLight;
+  }
+
+  // ── Upgrade to a specialised variant ─────────────────────
+  upgrade(v: TurretVariant) {
+    this.variant = v;
+    if (v === 'anti-infantry') {
+      // Dual autocannons — rapid fire, ineffective vs armour
+      this.atkDmg   = 14;   this.atkRange = 158;  this.atkRate  = 3.4;
+      this.maxHp    = 420;  this.hp = Math.min(this.hp, 420);
+      this.projColor = '#66FF99';
+    } else {
+      // Heavy AT cannon — slow, hard-hitting, punches armour
+      this.atkDmg   = 90;   this.atkRange = 215;  this.atkRate  = 0.62;
+      this.maxHp    = 560;  this.hp = Math.min(this.hp, 560);
+      this.projColor = '#FF8800';
+    }
+  }
+
+  _variantDmg(target: Entity): number {
+    const isArmored = target instanceof Tank || target instanceof HeavyTank ||
+                      (target instanceof EnemyUnit && (target as EnemyUnit).isTank);
+    if (this.variant === 'anti-infantry') return isArmored ? 0.28 : 1.0;
+    if (this.variant === 'anti-tank')     return isArmored ? 1.65 : 0.42;
+    return 1.0;
   }
 
   update(dt: number, targets: Entity[], projectiles: Projectile[]) {
@@ -201,13 +315,16 @@ export class Turret extends Building {
     if (this.atkTarget) {
       const dx=this.atkTarget.cx-this.cx, dy=this.atkTarget.cy-this.cy;
       const targetAng=Math.atan2(dy,dx);
-      this.barrel=lerpAngle(this.barrel,targetAng,Math.min(1,dt*5));
+      const lerpSpeed=this.variant==='anti-tank'?3.5:5;
+      this.barrel=lerpAngle(this.barrel,targetAng,Math.min(1,dt*lerpSpeed));
+      this.barrel2=lerpAngle(this.barrel2,targetAng+0.18,Math.min(1,dt*lerpSpeed));
       let diff=targetAng-this.barrel;
       while(diff>Math.PI)diff-=Math.PI*2; while(diff<-Math.PI)diff+=Math.PI*2;
-      if(this.atkCd<=0 && Math.abs(diff)<0.35){
+      if(this.atkCd<=0 && Math.abs(diff)<0.4){
         const d=hypot(this.cx,this.cy,this.atkTarget.cx,this.atkTarget.cy);
         if(d<=this.atkRange){
-          projectiles.push(new Projectile(this.cx,this.cy,this.atkTarget,this.atkDmg,450,this.projColor));
+          const dmg=this.atkDmg*this._variantDmg(this.atkTarget);
+          projectiles.push(new Projectile(this.cx,this.cy,this.atkTarget,dmg,480,this.projColor));
           this.atkCd=1/this.atkRate;
         }
       }
@@ -217,28 +334,120 @@ export class Turret extends Building {
   draw(ctx: CanvasRenderingContext2D) {
     const {x,y,w,h}=this;
     const pl=this.team==='player';
-    const base=this._flash>0?'#FFFFFF':(pl?C.allyDark:C.enemyDark);
     const accent=pl?C.allyAccent:C.enemyAccent;
-    ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(x+4,y+4,w,h);
-    ctx.fillStyle=base; ctx.fillRect(x,y,w,h);
-    ctx.strokeStyle=accent; ctx.lineWidth=1.5; ctx.strokeRect(x,y,w,h);
-    ctx.beginPath(); ctx.moveTo(x+4,y+4); ctx.lineTo(x+w-4,y+h-4);
-    ctx.moveTo(x+w-4,y+4); ctx.lineTo(x+4,y+h-4);
-    ctx.strokeStyle='rgba(0,0,0,0.3)'; ctx.lineWidth=1; ctx.stroke();
+
+    // ── Sandbag / platform base ────────────────────────────
+    const baseColor = this._flash>0?'#FFF'
+      : this.variant==='anti-infantry' ? (pl?'#163A1A':'#3A1414')
+      : this.variant==='anti-tank'     ? (pl?'#102030':'#301010')
+      : (pl?C.allyDark:C.enemyDark);
+
+    // Drop shadow
+    ctx.fillStyle='rgba(0,0,0,0.45)'; ctx.fillRect(x+5,y+5,w,h);
+
+    // Platform base (octagonal-ish: cut corners)
+    ctx.fillStyle=baseColor;
+    ctx.beginPath();
+    const cut=5;
+    ctx.moveTo(x+cut,y); ctx.lineTo(x+w-cut,y); ctx.lineTo(x+w,y+cut);
+    ctx.lineTo(x+w,y+h-cut); ctx.lineTo(x+w-cut,y+h); ctx.lineTo(x+cut,y+h);
+    ctx.lineTo(x,y+h-cut); ctx.lineTo(x,y+cut); ctx.closePath(); ctx.fill();
+
+    // Sandbag ring (only for standard — AI/AT get reinforced concrete look)
+    if (this.variant==='standard') {
+      const sbColor='#7A6A48';
+      for(let i=0;i<8;i++){
+        const a=i/8*Math.PI*2, bx=this.cx+Math.cos(a)*13, by=this.cy+Math.sin(a)*13;
+        ctx.beginPath(); ctx.ellipse(bx,by,4.5,3,a,0,Math.PI*2);
+        ctx.fillStyle=sbColor; ctx.fill();
+        ctx.strokeStyle='rgba(0,0,0,0.4)'; ctx.lineWidth=0.7; ctx.stroke();
+      }
+    } else {
+      // Reinforced concrete ring
+      const ringColor=this.variant==='anti-tank'?'#1A2A3A':'#1A3A20';
+      ctx.beginPath(); ctx.arc(this.cx,this.cy,13,0,Math.PI*2);
+      ctx.strokeStyle=ringColor; ctx.lineWidth=3.5; ctx.stroke();
+      ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=1; ctx.stroke();
+    }
+
+    // Range ring when selected
     if (this.selected) {
+      const ringCol=this.variant==='anti-infantry'?'rgba(100,255,150,0.15)'
+        :this.variant==='anti-tank'?'rgba(255,130,0,0.15)':'rgba(0,255,80,0.15)';
       ctx.beginPath(); ctx.arc(this.cx,this.cy,this.atkRange,0,Math.PI*2);
-      ctx.strokeStyle='rgba(0,255,80,0.18)'; ctx.lineWidth=1; ctx.setLineDash([5,8]); ctx.stroke(); ctx.setLineDash([]);
+      ctx.strokeStyle=ringCol; ctx.lineWidth=1; ctx.setLineDash([5,8]); ctx.stroke(); ctx.setLineDash([]);
       drawBrackets(ctx,x-4,y-4,w+8,h+8,7);
       ctx.strokeStyle=C.uiAccent; ctx.lineWidth=2; ctx.strokeRect(x-4,y-4,w+8,h+8);
     }
-    ctx.beginPath(); ctx.arc(this.cx,this.cy,12,0,Math.PI*2);
-    ctx.fillStyle=this.disabled?'#333':accent; ctx.fill();
-    ctx.strokeStyle='#000'; ctx.lineWidth=1; ctx.stroke();
-    const blen=22; ctx.save(); ctx.translate(this.cx,this.cy); ctx.rotate(this.barrel);
-    ctx.fillStyle=this.disabled?'#555':'#EEE'; ctx.fillRect(0,-2.5,blen,5);
-    ctx.fillStyle=this.disabled?'#444':'#AAA'; ctx.fillRect(blen-5,-3,5,6); ctx.restore();
-    drawHpBar(ctx,this.cx,this.y-11,this.w+4,this.hp,this.maxHp);
-    if(this.disabled){ctx.fillStyle='rgba(255,80,0,0.85)'; ctx.font='bold 7px "Courier New"'; ctx.textAlign='center'; ctx.fillText('NO PWR',this.cx,y-3); ctx.textAlign='left';}
+
+    // ── Turret head ────────────────────────────────────────
+    const headColor=this.disabled?'#333'
+      : this.variant==='anti-infantry'?(pl?'#22AA44':'#AA2222')
+      : this.variant==='anti-tank'    ?(pl?'#1A3A6A':'#6A1A1A')
+      : accent;
+
+    ctx.beginPath(); ctx.arc(this.cx,this.cy,10,0,Math.PI*2);
+    ctx.fillStyle=headColor; ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.lineWidth=1.5; ctx.stroke();
+    // Head highlight
+    ctx.beginPath(); ctx.arc(this.cx-2,this.cy-2,4,0,Math.PI*2);
+    ctx.fillStyle='rgba(255,255,255,0.12)'; ctx.fill();
+
+    // ── Barrels ────────────────────────────────────────────
+    ctx.save(); ctx.translate(this.cx,this.cy);
+
+    if (this.variant==='anti-infantry') {
+      // Dual autocannon barrels (parallel, offset)
+      for(const off of [-3,3]){
+        ctx.rotate(this.barrel - (this.barrel2 - this.barrel)*0.5 + off*0.001);
+        ctx.save();
+        ctx.rotate(off * 0.001); // tiny spread
+        const bCol=this.disabled?'#555':'#CCEECC';
+        ctx.fillStyle=bCol; ctx.fillRect(0, off-1.5, 24, 3);
+        ctx.fillStyle=this.disabled?'#444':'#AACCAA';
+        ctx.fillRect(20, off-2, 4, 4); // muzzle block
+        ctx.restore();
+        ctx.rotate(-(this.barrel - (this.barrel2 - this.barrel)*0.5 + off*0.001));
+      }
+      // Re-draw aimed
+      ctx.rotate(this.barrel);
+      ctx.fillStyle=this.disabled?'#555':'#CCEECC';
+      ctx.fillRect(1,-4,23,3.5); ctx.fillRect(1,0.5,23,3.5);
+      ctx.fillStyle=this.disabled?'#444':'#99CC99';
+      ctx.fillRect(22,-4.5,3,8.5);
+
+    } else if (this.variant==='anti-tank') {
+      // Long heavy AT cannon, thick barrel with muzzle brake
+      ctx.rotate(this.barrel);
+      ctx.fillStyle=this.disabled?'#555':'#AABBCC';
+      ctx.fillRect(0,-4.5,34,9); // thick barrel
+      ctx.fillStyle=this.disabled?'#444':'#8899AA';
+      ctx.fillRect(28,-6,6,12); // muzzle brake
+      ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(0,-1,34,2); // seam
+      // Barrel details
+      ctx.fillStyle='rgba(255,255,255,0.15)'; ctx.fillRect(2,-4.5,30,2.5);
+
+    } else {
+      // Standard single barrel
+      ctx.rotate(this.barrel);
+      ctx.fillStyle=this.disabled?'#555':'#DDDDDD'; ctx.fillRect(0,-2.5,24,5);
+      ctx.fillStyle=this.disabled?'#444':'#AAAAAA'; ctx.fillRect(20,-3,5,6);
+    }
+    ctx.restore();
+
+    // Variant badge
+    if (this.variant!=='standard' && this.team==='player') {
+      const badge=this.variant==='anti-infantry'?'AI':'AT';
+      const bCol=this.variant==='anti-infantry'?'#22FF66':'#FF8800';
+      ctx.fillStyle=bCol; ctx.font='bold 6px "Courier New"'; ctx.textAlign='center';
+      ctx.fillText(badge,this.cx,y+h+10); ctx.textAlign='left';
+    }
+
+    drawHpBar(ctx,this.cx,this.y-13,this.w+6,this.hp,this.maxHp);
+    if(this.disabled){
+      ctx.fillStyle='rgba(255,80,0,0.9)'; ctx.font='bold 7px "Courier New"'; ctx.textAlign='center';
+      ctx.fillText('NO PWR',this.cx,y-4); ctx.textAlign='left';
+    }
   }
 }
 
@@ -580,13 +789,13 @@ export class Unit extends Entity {
       const dx=this.x-o.x,dy=this.y-o.y;
       const d=Math.hypot(dx,dy);
       if(d<0.01)continue;
-      const hard=(this.radius+o.radius)*1.05;  // no-overlap zone
-      const soft=(this.radius+o.radius)*2.8;   // personal-space zone
+      const hard=(this.radius+o.radius)*1.02;  // no-overlap zone (tight)
+      const soft=(this.radius+o.radius)*1.7;   // personal-space zone (reduced from 2.8)
       if(d<hard){
-        const push=(hard-d)*0.35;
+        const push=(hard-d)*0.30;
         this.x+=(dx/d)*push; this.y+=(dy/d)*push;
       } else if(d<soft){
-        const push=(soft-d)*0.045;
+        const push=(soft-d)*0.018;              // gentler drift (was 0.045)
         this.x+=(dx/d)*push; this.y+=(dy/d)*push;
       }
     }
@@ -598,26 +807,69 @@ export class Unit extends Entity {
       ctx.fillStyle=this.team==='player'?C.allyAccent:C.enemyAccent; ctx.fill(); return;
     }
     const pl=this.team==='player';
-    const base=pl?C.allyBase:C.enemyBase; const dark=pl?C.allyDark:C.enemyDark;
     const r=this.radius;
-    ctx.beginPath();ctx.arc(this.x+2,this.y+2,r,0,Math.PI*2);ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fill();
-    if(!this._flash){
-      ctx.shadowBlur=12;ctx.shadowColor=pl?C.allyAccent:C.enemyAccent;
-      ctx.beginPath();ctx.arc(this.x,this.y,r+3,0,Math.PI*2);
-      ctx.fillStyle=pl?'rgba(68,170,255,0.22)':'rgba(255,85,34,0.22)';ctx.fill();ctx.shadowBlur=0;
-    }
     const inCover=this._game?.terrain.coverMult(this.x,this.y)??0;
-    ctx.beginPath();ctx.arc(this.x,this.y,r,0,Math.PI*2);ctx.fillStyle=this._flash>0?'#FFF':base;ctx.fill();
-    if(inCover>0&&!this._flash){ctx.globalAlpha=inCover*0.4;ctx.fillStyle='#001A00';ctx.beginPath();ctx.arc(this.x,this.y,r,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;}
-    ctx.strokeStyle=pl?C.allyLight:C.enemyLight;ctx.lineWidth=1.5;ctx.stroke();
-    ctx.beginPath();ctx.arc(this.x,this.y,r*0.42,0,Math.PI*2);ctx.fillStyle=this._flash>0?'#EEE':dark;ctx.fill();
-    ctx.save();ctx.translate(this.x,this.y);ctx.rotate(this.angle);
-    ctx.beginPath();ctx.arc(r*0.62,0,3,0,Math.PI*2);ctx.fillStyle=this._flash>0?'#FFF':(pl?C.allyGold:C.enemyAccent);ctx.fill();
+
+    // Ambient glow
+    if(!this._flash){
+      ctx.shadowBlur=8; ctx.shadowColor=pl?C.allyAccent:C.enemyAccent;
+      ctx.beginPath(); ctx.arc(this.x,this.y,r+2,0,Math.PI*2);
+      ctx.fillStyle=pl?'rgba(68,170,255,0.14)':'rgba(255,85,34,0.14)'; ctx.fill();
+      ctx.shadowBlur=0;
+    }
+
+    // Draw soldier in local (rotated) space
+    ctx.save();
+    ctx.translate(this.x,this.y);
+    ctx.rotate(this.angle);
+
+    // Drop shadow
+    ctx.beginPath(); ctx.ellipse(1.5,1.5,r*0.8,r*0.65,0,0,Math.PI*2);
+    ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.fill();
+
+    // Body (upright oval — slightly taller than wide)
+    const bodyCol=this._flash>0?'#FFF':(pl?C.allyBase:C.enemyBase);
+    ctx.beginPath(); ctx.ellipse(0,0,r*0.65,r*0.85,0,0,Math.PI*2);
+    ctx.fillStyle=bodyCol; ctx.fill();
+    // Webbing / vest detail
+    ctx.fillStyle=pl?C.allyDark:C.enemyDark; ctx.globalAlpha=0.55;
+    ctx.beginPath(); ctx.ellipse(-r*0.05,r*0.1,r*0.38,r*0.52,0,0,Math.PI*2); ctx.fill();
+    ctx.globalAlpha=1;
+    // Outline
+    ctx.strokeStyle=pl?C.allyLight:C.enemyLight; ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.ellipse(0,0,r*0.65,r*0.85,0,0,Math.PI*2); ctx.stroke();
+
+    // Helmet (dome on forward side — +X in local space)
+    const helmCol=this._flash>0?'#EEE':(pl?'#1A4088':'#701010');
+    ctx.fillStyle=helmCol;
+    ctx.beginPath(); ctx.arc(r*0.28,-r*0.50,r*0.46,Math.PI*0.15,Math.PI*1.15); ctx.closePath(); ctx.fill();
+    // Helmet brim
+    ctx.strokeStyle=pl?'#1A3060':'#501010'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.arc(r*0.28,-r*0.50,r*0.46,Math.PI*0.15,Math.PI*1.15); ctx.stroke();
+
+    // Rifle (thin bar extending forward = +X)
+    ctx.fillStyle=this._flash>0?'#FFF':'#4A4A3A';
+    ctx.fillRect(r*0.38,-r*0.12,r*1.3,r*0.24);
+    // Barrel tip
+    ctx.fillStyle=this._flash>0?'#FFF':'#2A2A22';
+    ctx.fillRect(r*1.50,-r*0.09,r*0.18,r*0.18);
+
+    // Cover camouflage overlay
+    if(inCover>0&&!this._flash){
+      ctx.globalAlpha=inCover*0.45; ctx.fillStyle='#001A00';
+      ctx.beginPath(); ctx.ellipse(0,0,r*0.65,r*0.85,0,0,Math.PI*2); ctx.fill();
+      ctx.globalAlpha=1;
+    }
     ctx.restore();
-    if(this.retreating){ctx.strokeStyle='#FFAA00';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(this.x-8,this.y);ctx.lineTo(this.x,this.y-12);ctx.stroke();}
-    // Suppression indicator
+
+    // Retreat arrow
+    if(this.retreating){
+      ctx.strokeStyle='#FFAA00';ctx.lineWidth=2;
+      ctx.beginPath();ctx.moveTo(this.x-8,this.y);ctx.lineTo(this.x,this.y-12);ctx.stroke();
+    }
+    // Suppression
     if(this._suppressTimer>0){
-      ctx.fillStyle='rgba(255,200,0,0.6)';ctx.font='6px "Courier New"';ctx.textAlign='center';
+      ctx.fillStyle='rgba(255,200,0,0.7)';ctx.font='6px "Courier New"';ctx.textAlign='center';
       ctx.fillText('SUP',this.x,this.y-r-3);ctx.textAlign='left';
     }
     this._drawVetPip(ctx,r);
@@ -679,11 +931,23 @@ export class Grenadier extends Unit {
 
   draw(ctx:CanvasRenderingContext2D,dotMode=false){
     if(dotMode){ctx.beginPath();ctx.arc(this.x,this.y,4,0,Math.PI*2);ctx.fillStyle='#FF8800';ctx.fill();return;}
+    // Call parent for base soldier silhouette then overlay grenadier details
     super.draw(ctx,dotMode);
-    // Orange stripe to distinguish from Infantry
     const r=this.radius;
-    ctx.beginPath();ctx.arc(this.x,this.y,r*0.42,0,Math.PI*2);
-    ctx.fillStyle='#FF8800';ctx.fill();
+    // Grenade belt — small orange arc around body
+    ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(this.angle);
+    ctx.strokeStyle='#FF7700'; ctx.lineWidth=2.2;
+    ctx.beginPath(); ctx.arc(-r*0.1,0,r*0.52,-Math.PI*0.55,Math.PI*0.55); ctx.stroke();
+    // Grenade indicators (small bumps on belt)
+    for(const a of [-0.28,0,0.28]){
+      const gx=-r*0.1+Math.cos(a)*r*0.52, gy=Math.sin(a)*r*0.52;
+      ctx.beginPath(); ctx.arc(gx,gy,r*0.18,0,Math.PI*2);
+      ctx.fillStyle='#FF8800'; ctx.fill();
+    }
+    // Orange helmet (distinguishes from infantry)
+    ctx.fillStyle='#CC5500';
+    ctx.beginPath(); ctx.arc(r*0.28,-r*0.50,r*0.44,Math.PI*0.15,Math.PI*1.15); ctx.closePath(); ctx.fill();
+    ctx.restore();
   }
 }
 
@@ -691,7 +955,7 @@ export class Grenadier extends Unit {
 // TANK
 // ═══════════════════════════════════════════════════════════════
 export class Tank extends Unit {
-  private _barrelAngle=-Math.PI/2;
+  protected _barrelAngle=-Math.PI/2;
 
   constructor(x:number,y:number,team:Team='player'){
     super(x,y,team);
@@ -721,14 +985,52 @@ export class Tank extends Unit {
     if(dotMode){ctx.beginPath();ctx.arc(this.x,this.y,5,0,Math.PI*2);ctx.fillStyle=this.team==='player'?C.allyGold:C.enemyLight;ctx.fill();return;}
     const pl=this.team==='player';
     const base=pl?C.allyBase:C.enemyBase; const dark=pl?C.allyDark:C.enemyDark; const r=this.radius;
-    ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(this.x-r+3,this.y-r+3,r*2,r*2);
-    ctx.fillStyle=this._flash>0?'#FFF':base;ctx.fillRect(this.x-r,this.y-r,r*2,r*2);
-    ctx.strokeStyle=dark;ctx.lineWidth=2;ctx.strokeRect(this.x-r,this.y-r,r*2,r*2);
-    ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fillRect(this.x-r,this.y-r,5,r*2);ctx.fillRect(this.x+r-5,this.y-r,5,r*2);
-    ctx.beginPath();ctx.arc(this.x,this.y,r*0.55,0,Math.PI*2);ctx.fillStyle=dark;ctx.fill();
-    ctx.save();ctx.translate(this.x,this.y);ctx.rotate(this._barrelAngle);
-    ctx.fillStyle=pl?'#AACCFF':'#FF8866';ctx.fillRect(0,-3,r*1.9,6);
-    ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(r*1.2,-3,r*0.7,6);ctx.restore();
+
+    // Drop shadow
+    ctx.fillStyle='rgba(0,0,0,0.45)'; ctx.fillRect(this.x-r+4,this.y-r+4,r*2,r*2);
+
+    // Hull
+    ctx.fillStyle=this._flash>0?'#FFF':base; ctx.fillRect(this.x-r,this.y-r,r*2,r*2);
+    // Armour plate highlights
+    ctx.fillStyle='rgba(255,255,255,0.07)'; ctx.fillRect(this.x-r,this.y-r,r*2,4);
+
+    // Track links (left & right side strips with segments)
+    const trackCol=this._flash>0?'#FFF':'rgba(0,0,0,0.55)';
+    ctx.fillStyle=trackCol;
+    ctx.fillRect(this.x-r,this.y-r,6,r*2); ctx.fillRect(this.x+r-6,this.y-r,6,r*2);
+    // Track segment lines
+    ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1;
+    for(let i=0;i<5;i++){
+      const ty=this.y-r+i*(r*2/5);
+      ctx.beginPath(); ctx.moveTo(this.x-r,ty); ctx.lineTo(this.x-r+6,ty); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(this.x+r-6,ty); ctx.lineTo(this.x+r,ty); ctx.stroke();
+    }
+    // Hull panel lines
+    ctx.strokeStyle=dark; ctx.lineWidth=1.5; ctx.strokeRect(this.x-r,this.y-r,r*2,r*2);
+    ctx.strokeStyle='rgba(0,0,0,0.3)'; ctx.lineWidth=0.8;
+    ctx.beginPath(); ctx.moveTo(this.x-r+7,this.y-r); ctx.lineTo(this.x-r+7,this.y+r); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(this.x+r-7,this.y-r); ctx.lineTo(this.x+r-7,this.y+r); ctx.stroke();
+
+    // Turret ring
+    ctx.beginPath(); ctx.arc(this.x,this.y,r*0.62,0,Math.PI*2);
+    ctx.fillStyle=dark; ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=1; ctx.stroke();
+
+    // Barrel with muzzle brake
+    ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(this._barrelAngle);
+    const bCol=pl?'#AACCFF':'#FF8866';
+    ctx.fillStyle=bCol; ctx.fillRect(0,-3.5,r*2.0,7);
+    // Muzzle brake
+    ctx.fillStyle=pl?'#8AAACE':'#CC6644';
+    ctx.fillRect(r*1.7,-5,r*0.35,10);
+    ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(r*1.7,-0.5,r*0.35,1);
+    ctx.restore();
+
+    // Hatch / vision port on turret
+    ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(this._barrelAngle);
+    ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(-r*0.2,-1.5,r*0.5,3);
+    ctx.restore();
+
     this._drawVetPip(ctx,r);
     this._drawSelection(ctx);
     drawHpBar(ctx,this.x,this.y-r-10,26,this.hp,this.maxHp);
@@ -758,11 +1060,69 @@ export class HeavyTank extends Tank {
 
   draw(ctx:CanvasRenderingContext2D,dotMode=false){
     if(dotMode){ctx.beginPath();ctx.arc(this.x,this.y,6,0,Math.PI*2);ctx.fillStyle=this.team==='player'?'#00AAFF':'#FF4400';ctx.fill();return;}
-    super.draw(ctx,dotMode);
-    // Extra armor stripe
-    const r=this.radius;
-    ctx.strokeStyle=this.team==='player'?'#00AAFF':'#FF4400';ctx.lineWidth=2;
-    ctx.strokeRect(this.x-r,this.y-r,r*2,r*2);
+    const pl=this.team==='player';
+    const r=this.radius; // 15
+    const base=pl?'#1A2A44':'#3A0C0C';
+    const dark=pl?'#0A1830':'#280808';
+    const accent=pl?'#00AAFF':'#FF4400';
+
+    // Drop shadow — heavier than light tank
+    ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(this.x-r+5,this.y-r+5,r*2,r*2);
+
+    // Outer armour skirts (wider than hull)
+    ctx.fillStyle=pl?'#152035':'#2A0808';
+    ctx.fillRect(this.x-r-3,this.y-r+2,r*2+6,r*2-4);
+
+    // Main hull
+    ctx.fillStyle=this._flash>0?'#FFF':base; ctx.fillRect(this.x-r,this.y-r,r*2,r*2);
+    // Armour top highlight
+    ctx.fillStyle='rgba(255,255,255,0.06)'; ctx.fillRect(this.x-r,this.y-r,r*2,5);
+
+    // Heavy track links (wider — 8px each side)
+    ctx.fillStyle=this._flash>0?'#FFF':'rgba(0,0,0,0.6)';
+    ctx.fillRect(this.x-r,this.y-r,8,r*2); ctx.fillRect(this.x+r-8,this.y-r,8,r*2);
+    ctx.strokeStyle='rgba(255,255,255,0.10)'; ctx.lineWidth=1.2;
+    for(let i=0;i<6;i++){
+      const ty=this.y-r+i*(r*2/6);
+      ctx.beginPath(); ctx.moveTo(this.x-r,ty); ctx.lineTo(this.x-r+8,ty); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(this.x+r-8,ty); ctx.lineTo(this.x+r,ty); ctx.stroke();
+    }
+
+    // Hull panel lines — double stripe for heavy armour
+    ctx.strokeStyle=dark; ctx.lineWidth=2; ctx.strokeRect(this.x-r,this.y-r,r*2,r*2);
+    ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.lineWidth=0.9;
+    ctx.beginPath(); ctx.moveTo(this.x-r+9,this.y-r); ctx.lineTo(this.x-r+9,this.y+r); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(this.x+r-9,this.y-r); ctx.lineTo(this.x+r-9,this.y+r); ctx.stroke();
+    // Centre hull divider
+    ctx.strokeStyle='rgba(0,0,0,0.2)'; ctx.lineWidth=0.7;
+    ctx.beginPath(); ctx.moveTo(this.x-r+9,this.y); ctx.lineTo(this.x+r-9,this.y); ctx.stroke();
+
+    // Accent border (coloured outer rim)
+    ctx.strokeStyle=accent; ctx.lineWidth=1.5; ctx.strokeRect(this.x-r-3,this.y-r+2,r*2+6,r*2-4);
+
+    // Large turret ring
+    ctx.beginPath(); ctx.arc(this.x,this.y,r*0.68,0,Math.PI*2);
+    ctx.fillStyle=dark; ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1.5; ctx.stroke();
+
+    // Barrel (wider + longer than regular tank)
+    ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(this._barrelAngle);
+    const bCol=pl?'#88CCFF':'#FF6644';
+    ctx.fillStyle=bCol; ctx.fillRect(0,-4.5,r*2.3,9);
+    // Muzzle brake (chunky double-slot)
+    ctx.fillStyle=pl?'#6699CC':'#CC4422';
+    ctx.fillRect(r*1.95,-6,r*0.38,12);
+    ctx.fillStyle='rgba(0,0,0,0.55)';
+    ctx.fillRect(r*1.95,-0.8,r*0.38,1.6);
+    ctx.fillRect(r*1.95,-3.5,r*0.38,1.0);
+    ctx.fillRect(r*1.95, r*0.14,r*0.38,1.0);
+    // Hatch
+    ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(-r*0.25,-2,r*0.55,4);
+    ctx.restore();
+
+    this._drawVetPip(ctx,r);
+    this._drawSelection(ctx);
+    drawHpBar(ctx,this.x,this.y-r-12,28,this.hp,this.maxHp);
   }
 }
 
@@ -838,35 +1198,75 @@ export class Artillery extends Unit {
   draw(ctx:CanvasRenderingContext2D,dotMode=false){
     if(dotMode){ctx.beginPath();ctx.arc(this.x,this.y,5,0,Math.PI*2);ctx.fillStyle='#FFEE00';ctx.fill();return;}
     const pl=this.team==='player'; const r=this.radius;
-    const base=this._flash>0?'#FFF':(pl?'#224488':'#442200');
+    const baseCol=this._flash>0?'#FFF':(pl?'#1E3050':'#442200');
+    const accentCol=pl?'#4488FF':'#FF6600';
+    const barrelCol=pl?'#AACCFF':'#FF8844';
 
-    ctx.fillStyle='rgba(0,0,0,0.35)';ctx.fillRect(this.x-r+3,this.y-r+3,r*2,r*2);
-    ctx.fillStyle=base;ctx.fillRect(this.x-r,this.y-r,r*2,r*2);
-    ctx.strokeStyle=pl?'#4488FF':'#FF6600';ctx.lineWidth=2;ctx.strokeRect(this.x-r,this.y-r,r*2,r*2);
-
+    // ── Deploy stabiliser legs (drawn behind hull) ──────────────
     if(this.deployed){
-      // Deploy legs
-      ctx.strokeStyle='rgba(100,100,80,0.8)';ctx.lineWidth=2;
-      ctx.beginPath();ctx.moveTo(this.x-r,this.y+r*0.4);ctx.lineTo(this.x-r-10,this.y+r+6);ctx.stroke();
-      ctx.beginPath();ctx.moveTo(this.x+r,this.y+r*0.4);ctx.lineTo(this.x+r+10,this.y+r+6);ctx.stroke();
+      ctx.strokeStyle=pl?'rgba(80,120,180,0.8)':'rgba(140,80,40,0.8)'; ctx.lineWidth=2.5;
+      // front legs
+      ctx.beginPath(); ctx.moveTo(this.x+r*0.5,this.y+r*0.6); ctx.lineTo(this.x+r*0.5+9,this.y+r+10); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(this.x-r*0.5,this.y+r*0.6); ctx.lineTo(this.x-r*0.5-9,this.y+r+10); ctx.stroke();
+      // rear jack
+      ctx.beginPath(); ctx.moveTo(this.x,this.y+r*0.8); ctx.lineTo(this.x,this.y+r+12); ctx.stroke();
+      // foot plates
+      ctx.fillStyle=pl?'#2244AA':'#884422';
+      ctx.fillRect(this.x+r*0.5+5,this.y+r+8,8,3);
+      ctx.fillRect(this.x-r*0.5-13,this.y+r+8,8,3);
+      ctx.fillRect(this.x-4,this.y+r+10,8,3);
     }
 
-    ctx.save();ctx.translate(this.x,this.y);ctx.rotate(this._barrelAngle);
-    ctx.fillStyle=pl?'#AACCFF':'#FF8844';ctx.fillRect(0,-4,r*2.4,8);
-    ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(r*1.6,-4,r*0.8,8);ctx.restore();
+    // ── Drop shadow ─────────────────────────────────────────────
+    ctx.fillStyle='rgba(0,0,0,0.38)'; ctx.fillRect(this.x-r+4,this.y-r+4,r*2,r*2);
 
-    // Deploy indicator
+    // ── Gun carriage body ────────────────────────────────────────
+    ctx.fillStyle=baseCol; ctx.fillRect(this.x-r,this.y-r,r*2,r*2);
+    // top highlight strip
+    ctx.fillStyle='rgba(255,255,255,0.07)'; ctx.fillRect(this.x-r,this.y-r,r*2,5);
+    // side panels (slightly recessed tone)
+    ctx.fillStyle='rgba(0,0,0,0.18)';
+    ctx.fillRect(this.x-r,this.y-r,5,r*2); ctx.fillRect(this.x+r-5,this.y-r,5,r*2);
+    // centre divider
+    ctx.strokeStyle='rgba(0,0,0,0.22)'; ctx.lineWidth=0.8;
+    ctx.beginPath(); ctx.moveTo(this.x-r+5,this.y); ctx.lineTo(this.x+r-5,this.y); ctx.stroke();
+    // border
+    ctx.strokeStyle=accentCol; ctx.lineWidth=1.8; ctx.strokeRect(this.x-r,this.y-r,r*2,r*2);
+
+    // Carriage detail — elevation wheel (left side)
+    ctx.beginPath(); ctx.arc(this.x-r*0.4,this.y,r*0.34,0,Math.PI*2);
+    ctx.fillStyle=pl?'#2A5080':'#664020'; ctx.fill();
+    ctx.strokeStyle=accentCol; ctx.lineWidth=1; ctx.stroke();
+    // spokes
+    ctx.strokeStyle='rgba(255,255,255,0.22)'; ctx.lineWidth=0.7;
+    for(let i=0;i<4;i++){const a=i*Math.PI/2;ctx.beginPath();ctx.moveTo(this.x-r*0.4+Math.cos(a)*r*0.12,this.y+Math.sin(a)*r*0.12);ctx.lineTo(this.x-r*0.4+Math.cos(a)*r*0.32,this.y+Math.sin(a)*r*0.32);ctx.stroke();}
+
+    // ── Rotating barrel (long + muzzle cap) ─────────────────────
+    ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(this._barrelAngle);
+    // barrel body
+    ctx.fillStyle=barrelCol; ctx.fillRect(0,-4,r*2.8,8);
+    // barrel highlight
+    ctx.fillStyle='rgba(255,255,255,0.12)'; ctx.fillRect(0,-4,r*2.7,3);
+    // muzzle cap (slightly wider)
+    ctx.fillStyle=pl?'#8AAACE':'#CC6633';
+    ctx.fillRect(r*2.4,-5.5,r*0.45,11);
+    // muzzle slot
+    ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(r*2.4,-0.6,r*0.45,1.2);
+    ctx.restore();
+
+    // ── Deploy state indicator bar ───────────────────────────────
     if(!this.deployed&&!this.moveTarget){
       const pct=this._deployTimer;
-      ctx.fillStyle='rgba(255,220,0,0.7)';ctx.font='6px "Courier New"';ctx.textAlign='center';
-      ctx.fillText('DEPLOYING',this.x,this.y-r-4);
-      ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(this.x-16,this.y-r-1,32,4);
-      ctx.fillStyle='#FFD700';ctx.fillRect(this.x-16,this.y-r-1,32*pct,4);ctx.textAlign='left';
+      ctx.fillStyle='rgba(255,220,0,0.75)'; ctx.font='bold 6px "Courier New"'; ctx.textAlign='center';
+      ctx.fillText('DEPLOYING',this.x,this.y-r-5);
+      ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(this.x-18,this.y-r-1,36,4);
+      ctx.fillStyle='#FFD700'; ctx.fillRect(this.x-18,this.y-r-1,36*pct,4);
+      ctx.textAlign='left';
     }
 
     this._drawVetPip(ctx,r);
     this._drawSelection(ctx);
-    drawHpBar(ctx,this.x,this.y-r-12,30,this.hp,this.maxHp);
+    drawHpBar(ctx,this.x,this.y-r-13,30,this.hp,this.maxHp);
   }
 }
 
@@ -896,16 +1296,56 @@ export class Scout extends Unit {
   draw(ctx:CanvasRenderingContext2D,dotMode=false){
     if(dotMode){ctx.beginPath();ctx.arc(this.x,this.y,3,0,Math.PI*2);ctx.fillStyle='#00FFCC';ctx.fill();return;}
     const pl=this.team==='player'; const r=this.radius;
-    // Diamond shape
-    const base=this._flash>0?'#FFF':(pl?'#00DDAA':'#FF8844');
+    const bodyCol=this._flash>0?'#FFF':(pl?'#1A8866':'#993322');
+    const accentCol=pl?'#00FFCC':'#FF8844';
+
+    ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(this.angle);
+
+    // Drop shadow
+    ctx.fillStyle='rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.ellipse(2,2,r*1.6,r*0.7,0,0,Math.PI*2); ctx.fill();
+
+    // Low-profile wedge body — wider at back, tapers to front (+X)
+    ctx.fillStyle=bodyCol;
     ctx.beginPath();
-    ctx.moveTo(this.x,this.y-r*1.5);ctx.lineTo(this.x+r,this.y);
-    ctx.lineTo(this.x,this.y+r*1.5);ctx.lineTo(this.x-r,this.y);ctx.closePath();
-    ctx.fillStyle=base;ctx.fill();
-    ctx.strokeStyle=pl?C.allyLight:C.enemyLight;ctx.lineWidth=1;ctx.stroke();
+    ctx.moveTo( r*1.4,  0);           // nose point
+    ctx.lineTo( r*0.4, -r*0.65);      // front shoulder
+    ctx.lineTo(-r*1.1, -r*0.8);       // rear left
+    ctx.lineTo(-r*1.4, -r*0.55);      // rear-left corner
+    ctx.lineTo(-r*1.4,  r*0.55);      // rear-right corner
+    ctx.lineTo(-r*1.1,  r*0.8);       // rear right
+    ctx.lineTo( r*0.4,  r*0.65);      // front shoulder
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle=accentCol; ctx.lineWidth=1; ctx.stroke();
+
+    // Cockpit / windshield strip
+    ctx.fillStyle='rgba(80,200,220,0.5)';
+    ctx.beginPath();
+    ctx.moveTo(r*1.0,0); ctx.lineTo(r*0.5,-r*0.45); ctx.lineTo(-r*0.1,-r*0.42);
+    ctx.lineTo(-r*0.1, r*0.42); ctx.lineTo(r*0.5, r*0.45); ctx.closePath(); ctx.fill();
+
+    // Roof panel line
+    ctx.strokeStyle='rgba(0,0,0,0.25)'; ctx.lineWidth=0.8;
+    ctx.beginPath(); ctx.moveTo(-r*0.1,-r*0.42); ctx.lineTo(-r*1.1,-r*0.7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-r*0.1, r*0.42); ctx.lineTo(-r*1.1, r*0.7); ctx.stroke();
+
+    // Antenna mast at back
+    ctx.strokeStyle=accentCol; ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.moveTo(-r*1.2,0); ctx.lineTo(-r*1.2,-r*1.5); ctx.stroke();
+    // Antenna tip blip
+    ctx.fillStyle=accentCol;
+    ctx.beginPath(); ctx.arc(-r*1.2,-r*1.5,1.5,0,Math.PI*2); ctx.fill();
+
+    // Exhaust port (rear)
+    ctx.fillStyle='rgba(0,0,0,0.4)';
+    ctx.fillRect(-r*1.4,-r*0.18,r*0.25,r*0.36);
+
+    ctx.restore();
+
+    // Vision radius ring when selected
     if(this.selected){
-      ctx.beginPath();ctx.arc(this.x,this.y,this.visionRadius,0,Math.PI*2);
-      ctx.strokeStyle='rgba(0,255,200,0.12)';ctx.lineWidth=1;ctx.setLineDash([5,8]);ctx.stroke();ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(this.x,this.y,this.visionRadius,0,Math.PI*2);
+      ctx.strokeStyle='rgba(0,255,200,0.10)'; ctx.lineWidth=1; ctx.setLineDash([5,9]); ctx.stroke(); ctx.setLineDash([]);
     }
     this._drawVetPip(ctx,r);
     this._drawSelection(ctx);
@@ -944,14 +1384,60 @@ export class AntitankGun extends Unit {
   draw(ctx:CanvasRenderingContext2D,dotMode=false){
     if(dotMode){ctx.beginPath();ctx.arc(this.x,this.y,4,0,Math.PI*2);ctx.fillStyle='#FF4400';ctx.fill();return;}
     const pl=this.team==='player'; const r=this.radius;
-    ctx.fillStyle='rgba(0,0,0,0.35)';ctx.fillRect(this.x-r+2,this.y-r+2,r*2,r*2);
-    ctx.fillStyle=this._flash>0?'#FFF':(pl?'#334422':'#443322');ctx.fillRect(this.x-r,this.y-r,r*2,r*2);
-    ctx.strokeStyle='#FF4400';ctx.lineWidth=2;ctx.strokeRect(this.x-r,this.y-r,r*2,r*2);
-    ctx.save();ctx.translate(this.x,this.y);ctx.rotate(this._barrelAngle);
-    ctx.fillStyle='#FF6622';ctx.fillRect(0,-3,r*2.2,6);
-    ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(r*1.5,-3,r*0.7,6);ctx.restore();
-    ctx.fillStyle='#FF4400';ctx.font='5px "Courier New"';ctx.textAlign='center';
-    ctx.fillText('AT',this.x,this.y+2);ctx.textAlign='left';
+
+    ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(this._barrelAngle);
+
+    // Drop shadow
+    ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(-r*0.8+2,-r*0.8+2,r*1.6,r*1.6);
+
+    // Gun carriage (low, compact body)
+    ctx.fillStyle=this._flash>0?'#FFF':(pl?'#2A3820':'#3A2010');
+    ctx.fillRect(-r*0.8,-r*0.7,r*1.6,r*1.4);
+    ctx.strokeStyle=pl?'#44AA22':'#CC4400'; ctx.lineWidth=1.5;
+    ctx.strokeRect(-r*0.8,-r*0.7,r*1.6,r*1.4);
+
+    // Shield plate (angled forward face — trapezoidal)
+    const shieldCol=this._flash>0?'#EEE':(pl?'#3A5A28':'#5A3018');
+    ctx.fillStyle=shieldCol;
+    ctx.beginPath();
+    ctx.moveTo(r*0.25,-r*0.95); ctx.lineTo(r*0.25,r*0.95);
+    ctx.lineTo(r*1.0, r*0.62); ctx.lineTo(r*1.0,-r*0.62);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.5)'; ctx.lineWidth=1; ctx.stroke();
+    // Vision slit in shield
+    ctx.fillStyle='rgba(0,0,0,0.7)';
+    ctx.fillRect(r*0.28,-r*0.11,r*0.68,r*0.22);
+
+    // Very long barrel (2.8× radius = 28px for AT gun)
+    ctx.fillStyle=pl?'#556644':'#774422';
+    ctx.fillRect(r*0.95,-r*0.18,r*2.8,r*0.36);
+    // Barrel seam highlight
+    ctx.fillStyle='rgba(255,255,255,0.14)';
+    ctx.fillRect(r*0.95,-r*0.18,r*2.7,r*0.09);
+    // Muzzle cone
+    ctx.fillStyle=pl?'#667755':'#885533';
+    ctx.beginPath();
+    ctx.moveTo(r*3.65,-r*0.24); ctx.lineTo(r*3.65,r*0.24);
+    ctx.lineTo(r*3.85,r*0.12); ctx.lineTo(r*3.85,-r*0.12);
+    ctx.closePath(); ctx.fill();
+
+    // Gunner (small circle behind shield)
+    ctx.fillStyle=this._flash>0?'#FFF':(pl?C.allyBase:C.enemyBase);
+    ctx.beginPath(); ctx.arc(-r*0.25,0,r*0.4,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle=pl?C.allyLight:C.enemyLight; ctx.lineWidth=1; ctx.stroke();
+    // Helmet on gunner
+    ctx.fillStyle=pl?'#1A4088':'#701010';
+    ctx.beginPath(); ctx.arc(-r*0.25,-r*0.22,r*0.28,Math.PI,Math.PI*2); ctx.closePath(); ctx.fill();
+
+    ctx.restore();
+
+    // Deployment wheels (small circles at back)
+    ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(this._barrelAngle);
+    ctx.fillStyle='#3A3A3A';
+    ctx.beginPath(); ctx.arc(-r*0.7,-r*0.78,r*0.22,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(-r*0.7, r*0.78,r*0.22,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+
     this._drawVetPip(ctx,r);
     this._drawSelection(ctx);
     drawHpBar(ctx,this.x,this.y-r-10,24,this.hp,this.maxHp);
@@ -1016,18 +1502,67 @@ export class Harvester extends Unit {
 
   draw(ctx:CanvasRenderingContext2D,dotMode=false){
     if(dotMode){ctx.beginPath();ctx.arc(this.x,this.y,4,0,Math.PI*2);ctx.fillStyle=C.tibGreen;ctx.fill();return;}
-    const{x,y}=this;const r=this.radius;
-    ctx.fillStyle='rgba(0,0,0,0.32)';ctx.fillRect(x-r+2,y-r+2,r*2,r*2);
-    ctx.fillStyle=this._flash>0?'#FFF':'#DDAA00';ctx.fillRect(x-r,y-r,r*2,r*2);
-    ctx.strokeStyle='#997700';ctx.lineWidth=1.5;ctx.strokeRect(x-r,y-r,r*2,r*2);
-    if(this.cargo>0){const cp=this.cargo/this.maxCargo;ctx.fillStyle=hexA(C.tibGreen,cp*0.75);ctx.fillRect(x-r+2,y+r-2-(r*2-4)*cp,r*2-4,(r*2-4)*cp);}
-    const labels:Record<HState,string>={idle:'IDL','to-field':'→TIB',harvesting:'HARV',returning:'LOAD'};
-    ctx.fillStyle='rgba(0,0,0,0.75)';ctx.font='6px "Courier New"';ctx.textAlign='center';
-    ctx.fillText(labels[this.state],x,y+2.5);ctx.textAlign='left';
-    if(this.selected){ctx.strokeStyle=C.uiAccent;ctx.lineWidth=2;ctx.strokeRect(x-r-5,y-r-5,r*2+10,r*2+10);}
-    drawHpBar(ctx,x,y-r-10,24,this.hp,this.maxHp);
-    // Cargo bar below HP bar
-    const cw=24,ch=3,cbx=x-cw/2,cby=y-r-6;
+    const r=this.radius;
+    const mov=this.moveTarget||this.state==='to-field'||this.state==='returning';
+
+    ctx.save(); ctx.translate(this.x,this.y);
+    // Point in movement/harvest direction based on state
+    const facingAngle = this.angle;
+    ctx.rotate(facingAngle);
+
+    // Drop shadow
+    ctx.fillStyle='rgba(0,0,0,0.38)'; ctx.fillRect(-r+3,-r+3,r*2,r*2);
+
+    // Main hull (boxy, heavy vehicle)
+    ctx.fillStyle=this._flash>0?'#FFF':'#DDAA00'; ctx.fillRect(-r,-r,r*2,r*2);
+    // Armour stripes
+    ctx.fillStyle='rgba(0,0,0,0.18)';
+    ctx.fillRect(-r,-r,r*2,5); ctx.fillRect(-r,r-5,r*2,5);
+    ctx.strokeStyle='#997700'; ctx.lineWidth=1.8; ctx.strokeRect(-r,-r,r*2,r*2);
+    // Cab window
+    ctx.fillStyle='rgba(80,160,220,0.55)';
+    ctx.fillRect(-r*0.35,-r*0.68,r*0.7,r*0.44);
+    ctx.strokeStyle='rgba(0,0,0,0.4)'; ctx.lineWidth=0.8;
+    ctx.strokeRect(-r*0.35,-r*0.68,r*0.7,r*0.44);
+
+    // Tiberium cargo fill (from bottom up, green)
+    if(this.cargo>0){
+      const cp=this.cargo/this.maxCargo;
+      const ch=(r*2-4)*cp;
+      ctx.fillStyle=hexA(C.tibGreen,cp*0.72);
+      ctx.fillRect(-r+2,r-2-ch,r*2-4,ch);
+    }
+
+    // Collection scoop/arm (front = +X in local space)
+    const scoopCol=this._flash>0?'#EEE':'#BB8800';
+    ctx.fillStyle=scoopCol;
+    // Arm extends forward
+    ctx.fillRect(r*0.85,-r*0.28,r*0.6,r*0.56);
+    // Scoop bucket tip
+    ctx.beginPath();
+    ctx.moveTo(r*1.35,-r*0.38); ctx.lineTo(r*1.35,r*0.38);
+    ctx.lineTo(r*1.65,r*0.22); ctx.lineTo(r*1.65,-r*0.22);
+    ctx.closePath();
+    ctx.fillStyle=this.state==='harvesting'?C.tibGreen:scoopCol; ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.4)'; ctx.lineWidth=1; ctx.stroke();
+
+    // Tracks
+    ctx.fillStyle='rgba(0,0,0,0.5)';
+    ctx.fillRect(-r,-r,4,r*2); ctx.fillRect(r-4,-r,4,r*2);
+    ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=0.7;
+    for(let i=0;i<5;i++){const ty=-r+i*(r*2/5);ctx.beginPath();ctx.moveTo(-r,ty);ctx.lineTo(-r+4,ty);ctx.moveTo(r-4,ty);ctx.lineTo(r,ty);ctx.stroke();}
+
+    ctx.restore();
+
+    // State label
+    const labels:Record<HState,string>={idle:'IDL','to-field':'TIB',harvesting:'HARV',returning:'RTN'};
+    ctx.fillStyle=this.state==='harvesting'?C.tibGreen:'rgba(255,200,0,0.85)';
+    ctx.font='bold 6px "Courier New"'; ctx.textAlign='center';
+    ctx.fillText(labels[this.state],this.x,this.y+r+11); ctx.textAlign='left';
+
+    if(this.selected){ctx.strokeStyle=C.uiAccent;ctx.lineWidth=2;ctx.strokeRect(this.x-r-5,this.y-r-5,r*2+10,r*2+10);}
+    drawHpBar(ctx,this.x,this.y-r-10,24,this.hp,this.maxHp);
+    const cw=24,ch=3,cbx=this.x-cw/2,cby=this.y-r-6;
     ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillRect(cbx,cby,cw,ch);
     ctx.fillStyle=C.tibGreen;ctx.fillRect(cbx,cby,cw*(this.cargo/this.maxCargo),ch);
   }
@@ -1115,15 +1650,74 @@ export class EnemyUnit extends Unit {
   private _drawTank(ctx:CanvasRenderingContext2D,dotMode=false){
     if(dotMode){ctx.beginPath();ctx.arc(this.x,this.y,this.isHeavy?7:5,0,Math.PI*2);ctx.fillStyle=this.isHeavy?'#FF4400':C.enemyLight;ctx.fill();return;}
     const r=this.radius;
-    ctx.fillStyle='rgba(0,0,0,0.4)';ctx.fillRect(this.x-r+3,this.y-r+3,r*2,r*2);
-    ctx.fillStyle=this._flash>0?'#FFF':C.enemyBase;ctx.fillRect(this.x-r,this.y-r,r*2,r*2);
-    ctx.strokeStyle=this.isHeavy?'#FF4400':C.enemyDark;ctx.lineWidth=this.isHeavy?2.5:2;ctx.strokeRect(this.x-r,this.y-r,r*2,r*2);
-    ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fillRect(this.x-r,this.y-r,4,r*2);ctx.fillRect(this.x+r-4,this.y-r,4,r*2);
-    ctx.beginPath();ctx.arc(this.x,this.y,r*0.55,0,Math.PI*2);ctx.fillStyle=C.enemyDark;ctx.fill();
-    ctx.save();ctx.translate(this.x,this.y);ctx.rotate(this._barrelAngle);
-    ctx.fillStyle=this.isHeavy?'#FF4400':C.enemyLight;ctx.fillRect(0,-3,r*1.9,6);ctx.restore();
+    const base=C.enemyBase; const dark=C.enemyDark;
+    const accent=this.isHeavy?'#FF4400':C.enemyLight;  // heavy = bright red, regular = orange
+
+    if(this.isHeavy){
+      // ── HEAVY ENEMY TANK ───────────────────────────────────────
+      // Drop shadow
+      ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(this.x-r+5,this.y-r+5,r*2,r*2);
+      // Armour skirts
+      ctx.fillStyle='#2A0808'; ctx.fillRect(this.x-r-3,this.y-r+2,r*2+6,r*2-4);
+      // Hull
+      ctx.fillStyle=this._flash>0?'#FFF':'#3A0C0C'; ctx.fillRect(this.x-r,this.y-r,r*2,r*2);
+      ctx.fillStyle='rgba(255,255,255,0.05)'; ctx.fillRect(this.x-r,this.y-r,r*2,5);
+      // Heavy tracks
+      ctx.fillStyle='rgba(0,0,0,0.6)';
+      ctx.fillRect(this.x-r,this.y-r,8,r*2); ctx.fillRect(this.x+r-8,this.y-r,8,r*2);
+      ctx.strokeStyle='rgba(255,255,255,0.09)'; ctx.lineWidth=1.2;
+      for(let i=0;i<6;i++){const ty=this.y-r+i*(r*2/6);ctx.beginPath();ctx.moveTo(this.x-r,ty);ctx.lineTo(this.x-r+8,ty);ctx.stroke();ctx.beginPath();ctx.moveTo(this.x+r-8,ty);ctx.lineTo(this.x+r,ty);ctx.stroke();}
+      // Hull lines
+      ctx.strokeStyle='#280808'; ctx.lineWidth=2; ctx.strokeRect(this.x-r,this.y-r,r*2,r*2);
+      ctx.strokeStyle='rgba(0,0,0,0.3)'; ctx.lineWidth=0.9;
+      ctx.beginPath();ctx.moveTo(this.x-r+9,this.y-r);ctx.lineTo(this.x-r+9,this.y+r);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(this.x+r-9,this.y-r);ctx.lineTo(this.x+r-9,this.y+r);ctx.stroke();
+      // Red accent border
+      ctx.strokeStyle='#FF4400'; ctx.lineWidth=1.5; ctx.strokeRect(this.x-r-3,this.y-r+2,r*2+6,r*2-4);
+      // Large turret ring
+      ctx.beginPath(); ctx.arc(this.x,this.y,r*0.68,0,Math.PI*2);
+      ctx.fillStyle='#280808'; ctx.fill();
+      ctx.strokeStyle='rgba(255,100,80,0.2)'; ctx.lineWidth=1.5; ctx.stroke();
+      // Wide barrel
+      ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(this._barrelAngle);
+      ctx.fillStyle='#CC5533'; ctx.fillRect(0,-4.5,r*2.3,9);
+      ctx.fillStyle='#882211'; ctx.fillRect(r*1.95,-6,r*0.38,12);
+      ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(r*1.95,-0.8,r*0.38,1.6); ctx.fillRect(r*1.95,-3.5,r*0.38,1.0); ctx.fillRect(r*1.95,r*0.14,r*0.38,1.0);
+      ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(-r*0.25,-2,r*0.55,4);
+      ctx.restore();
+      drawHpBar(ctx,this.x,this.y-r-12,28,this.hp,this.maxHp);
+    } else {
+      // ── REGULAR ENEMY TANK ─────────────────────────────────────
+      // Drop shadow
+      ctx.fillStyle='rgba(0,0,0,0.45)'; ctx.fillRect(this.x-r+4,this.y-r+4,r*2,r*2);
+      // Hull
+      ctx.fillStyle=this._flash>0?'#FFF':base; ctx.fillRect(this.x-r,this.y-r,r*2,r*2);
+      ctx.fillStyle='rgba(255,255,255,0.06)'; ctx.fillRect(this.x-r,this.y-r,r*2,4);
+      // Track links
+      ctx.fillStyle='rgba(0,0,0,0.55)';
+      ctx.fillRect(this.x-r,this.y-r,6,r*2); ctx.fillRect(this.x+r-6,this.y-r,6,r*2);
+      ctx.strokeStyle='rgba(255,255,255,0.10)'; ctx.lineWidth=1;
+      for(let i=0;i<5;i++){const ty=this.y-r+i*(r*2/5);ctx.beginPath();ctx.moveTo(this.x-r,ty);ctx.lineTo(this.x-r+6,ty);ctx.stroke();ctx.beginPath();ctx.moveTo(this.x+r-6,ty);ctx.lineTo(this.x+r,ty);ctx.stroke();}
+      // Hull panel lines
+      ctx.strokeStyle=dark; ctx.lineWidth=1.5; ctx.strokeRect(this.x-r,this.y-r,r*2,r*2);
+      ctx.strokeStyle='rgba(0,0,0,0.28)'; ctx.lineWidth=0.8;
+      ctx.beginPath();ctx.moveTo(this.x-r+7,this.y-r);ctx.lineTo(this.x-r+7,this.y+r);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(this.x+r-7,this.y-r);ctx.lineTo(this.x+r-7,this.y+r);ctx.stroke();
+      // Turret ring
+      ctx.beginPath(); ctx.arc(this.x,this.y,r*0.60,0,Math.PI*2);
+      ctx.fillStyle=dark; ctx.fill();
+      ctx.strokeStyle='rgba(255,150,100,0.2)'; ctx.lineWidth=1; ctx.stroke();
+      // Barrel + muzzle brake
+      ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(this._barrelAngle);
+      ctx.fillStyle='#CC7744'; ctx.fillRect(0,-3.5,r*2.0,7);
+      ctx.fillStyle='#AA5522'; ctx.fillRect(r*1.7,-5,r*0.35,10);
+      ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(r*1.7,-0.5,r*0.35,1);
+      ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(-r*0.2,-1.5,r*0.5,3);
+      ctx.restore();
+      drawHpBar(ctx,this.x,this.y-r-10,26,this.hp,this.maxHp);
+    }
+
     this._drawVetPip(ctx,r);
     this._drawSelection(ctx);
-    drawHpBar(ctx,this.x,this.y-r-10,26,this.hp,this.maxHp);
   }
 }

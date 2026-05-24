@@ -12,7 +12,7 @@ import {
   Building, Turret, TiberiumField, Projectile,
   Unit, Tank, HeavyTank, Grenadier, Artillery, Scout, AntitankGun,
   Harvester, EnemyUnit, CaptureNode,
-  type GameRef, type Entity,
+  type GameRef, type Entity, type TurretVariant,
 } from './entities';
 import {
   credits, powerGen, powerUsed, incomeRate,
@@ -20,6 +20,7 @@ import {
   gameState, selected, buildMode,
   statusMsg, selHasBarracks, selHasRefinery, selHasWarFactory, selHasUnits,
   hasBarracks, hasRefinery, hasTechLab, hasWarFactory, selHasTechLab,
+  selHasTurret, selTurretVariant,
   warFactoryHp, warFactoryMaxHp,
   enemiesKilled, unitsLost, unitsProduced,
   selBuildingQueue, captureNodesState, holdProgress,
@@ -406,6 +407,25 @@ export class Engine {
     this._flashMsgs.push({text:'EMP!',x:MAP_W/2,y:MAP_H/2-40,t:2.5,maxT:2.5,color:'#FFEE00'});
   }
 
+  // ── TURRET UPGRADE ───────────────────────────────────────
+  upgradeTurret(variant: TurretVariant){
+    if(variant==='standard')return;
+    const costs:Record<string,number>={'anti-infantry':250,'anti-tank':350};
+    const cost=costs[variant]??999;
+    const t=this._selected.find(e=>e instanceof Turret&&e.team==='player') as Turret|undefined;
+    if(!t)return this.setStatus('Select a turret first!','warn');
+    if(t.variant!=='standard')return this.setStatus('Already upgraded!','warn');
+    if(!this.buildings.some(b=>b.team==='player'&&b.type==='Tech Lab'))return this.setStatus('Tech Lab required!','error');
+    if(this._credits<cost)return this.setStatus('Not enough credits!','error');
+    this._credits-=cost;
+    t.upgrade(variant);
+    sound.upgrade();
+    const label=variant==='anti-infantry'?'Anti-Infantry':'Anti-Tank';
+    this.setStatus(`Turret upgraded → ${label}!`,'success');
+    this._recalcPower();
+    this._syncStores();
+  }
+
   // ── PAUSE ────────────────────────────────────────────────
   togglePause(){
     this._paused=!this._paused;
@@ -442,6 +462,12 @@ export class Engine {
     this._credits-=cost;
     const b=type==='Turret'?new Turret(wx,wy,'player'):new Building(wx,wy,type,'player');
     this.buildings.push(b); this._buildMode=null; this._recalcPower();
+    // Auto-spawn a harvester beside every newly placed Refinery
+    if(type==='Refinery'){
+      const h=new Harvester(wx+60,wy,this._ref);
+      h._speedMult=this._powerOk?1.0:0.6;
+      this.pUnits.push(h);
+    }
     sound.buildPlace();
     this.setStatus(`${type} placed!`,'success'); this._syncStores();
   }
@@ -1132,6 +1158,8 @@ export class Engine {
     hasTechLab.set(this.buildings.some(b=>b.team==='player'&&b.type==='Tech Lab'));
     hasWarFactory.set(this.buildings.some(b=>b.team==='player'&&b.type==='War Factory'));
     selHasBarracks.set(this._selected.some(e=>e instanceof Building&&e.type==='Barracks'&&e.team==='player'));
+    const selTurret=this._selected.find(e=>e instanceof Turret&&e.team==='player') as Turret|undefined;
+    selHasTurret.set(!!selTurret); selTurretVariant.set(selTurret?.variant??'standard');
     selHasRefinery.set(this._selected.some(e=>e instanceof Building&&e.type==='Refinery'&&e.team==='player'));
     selHasWarFactory.set(this._selected.some(e=>e instanceof Building&&e.type==='War Factory'&&e.team==='player'));
     selHasUnits.set(this._selected.some(e=>e instanceof Unit&&e.team==='player'));
