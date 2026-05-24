@@ -293,8 +293,14 @@
       ▶ {menuMode === 'campaign' ? 'START CAMPAIGN' : 'START SKIRMISH'}
     </button>
     <div class="press-hint">or press ENTER</div>
+
+    <div class="menu-disclaimer">
+      <p>An ode to Command &amp; Conquer — built from scratch in 48 hours as an act of free will.</p>
+      <p>This is a fan-made tribute. Not affiliated with, endorsed by, or attempting to steal from Electronic Arts.</p>
+    </div>
   </div>
 </div>
+{#if false}{/if}
 {/if}
 
 <!-- ══════════════════════════════════════════════════
@@ -707,4 +713,12 @@
   @keyframes blink-pip   { 0%,100%{opacity:1} 50%{opacity:0.2} }
   @keyframes pulse-warn  { from{opacity:.8} to{opacity:1} }
   @keyframes blink-pause { 0%,100%{opacity:1} 50%{opacity:0.35} }
+  /* ── DISCLAIMER ────────────────────────────────────── */
+  .menu-disclaimer {
+    margin-top: 18px; padding-top: 12px; border-top: 1px dashed #1E4A1E;
+    text-align: center; color: #3A6A3A; font-size: 8.5px; letter-spacing: 0.5px;
+    line-height: 1.5; font-family: 'Courier New', monospace;
+  }
+  .menu-disclaimer p { margin: 3px 0; }
+  .menu-disclaimer p:first-child { color: #669966; font-weight: bold; }
 </style>
