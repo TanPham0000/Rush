@@ -103,6 +103,7 @@ export type MapTheme = 0 | 1 | 2 | 3;   // 0=rivers, 1=hills, 2=city, 3=beach
 export interface CaptureNodeDef {
   cx: number; cy: number; label: string; income: number;
   isCenter: boolean; isBlackMarket?: boolean;
+  isRadar?: boolean; isBeachGun?: boolean;
 }
 
 export interface MapDef {
@@ -209,7 +210,10 @@ export const MAPS: MapDef[] = [
     enemyHpScale: 1.0,
     playerBase:   { cx: 200, cy: 600 },
     enemyBase:    { cx: 1760, cy: 600 },
-    captureNodes: [],
+    captureNodes: [
+      { cx: 720,  cy: 220, label: 'RADAR TOWER', income: 0, isCenter: false, isRadar:    true },
+      { cx: 1260, cy: 960, label: 'BEACH GUN',   income: 0, isCenter: false, isBeachGun: true },
+    ],
     tibFields: [
       [300, 280], [300, 920], [560, 200], [560, 1000], [820, 420], [820, 780],
     ].map(([cx,cy]) => ({ cx, cy })),

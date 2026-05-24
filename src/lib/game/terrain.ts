@@ -398,8 +398,16 @@ export class TerrainMap {
       { x:  640, y:  840, w: 200, h: 180 },
     );
     // Seawall / embankment — full-height ridge, gives range bonus
+    // Sand dunes — elevation patches in the approach zone, provide cover
     (this.highGround as HighGround[]).push(
-      { x: 1380, y:   0, w: 80, h: MAP_H },
+      { x: 1380, y:    0, w: 80, h: MAP_H  },  // seawall (full height)
+      // dunes — scattered mounds in the contested approach
+      { x: 1100, y:   60, w: 110, h:  90   },
+      { x: 1210, y:  260, w: 120, h: 100   },
+      { x: 1080, y:  480, w: 105, h:  85   },
+      { x: 1190, y:  700, w: 115, h:  95   },
+      { x: 1095, y:  920, w: 108, h:  88   },
+      { x: 1220, y: 1090, w: 110, h:  90   },
     );
     // Sandbag positions — cover clusters in the defense line and approach
     (this.rocks as RockCluster[]).push(
@@ -447,18 +455,50 @@ export class TerrainMap {
     c.strokeStyle = 'rgba(160,140,60,0.3)'; c.lineWidth=1; c.setLineDash([10,14]);
     c.beginPath(); c.moveTo(0,585); c.lineTo(1380,585); c.stroke(); c.setLineDash([]);
 
-    // Seawall / embankment
+    // Seawall / embankment + approach sand dunes
     for (const h of this.highGround) {
-      const sg = c.createLinearGradient(h.x,0,h.x+h.w,0);
-      sg.addColorStop(0,  C.seawall);
-      sg.addColorStop(0.4,'#6A5E48');
-      sg.addColorStop(1,  '#4A4030');
-      c.fillStyle = sg; c.fillRect(h.x, h.y, h.w, h.h);
-      // Wall texture lines
-      c.strokeStyle = 'rgba(0,0,0,0.3)'; c.lineWidth = 1;
-      for (let y = 0; y < MAP_H; y += 28) c.strokeRect(h.x+4, y+4, h.w-8, 20);
-      c.fillStyle = 'rgba(200,180,100,0.45)'; c.font='bold 8px "Courier New"'; c.textAlign='center';
-      c.fillText('SEAWALL', h.x+h.w/2, MAP_H/2+4); c.textAlign='left';
+      if (h.h === MAP_H) {
+        // ── Full-height seawall ──────────────────────────────
+        const sg = c.createLinearGradient(h.x,0,h.x+h.w,0);
+        sg.addColorStop(0,  C.seawall);
+        sg.addColorStop(0.4,'#6A5E48');
+        sg.addColorStop(1,  '#4A4030');
+        c.fillStyle = sg; c.fillRect(h.x, h.y, h.w, h.h);
+        // Wall texture lines
+        c.strokeStyle = 'rgba(0,0,0,0.3)'; c.lineWidth = 1;
+        for (let y = 0; y < MAP_H; y += 28) c.strokeRect(h.x+4, y+4, h.w-8, 20);
+        c.fillStyle = 'rgba(200,180,100,0.45)'; c.font='bold 8px "Courier New"'; c.textAlign='center';
+        c.fillText('SEAWALL', h.x+h.w/2, MAP_H/2+4); c.textAlign='left';
+      } else {
+        // ── Sand dune — rounded sandy mound ─────────────────
+        const dcx=h.x+h.w/2, dcy=h.y+h.h/2;
+        // Soft sand base
+        const dg = c.createRadialGradient(dcx,dcy,0, dcx,dcy, Math.max(h.w,h.h)*0.72);
+        dg.addColorStop(0,   '#D8CA7A');  // bright crest
+        dg.addColorStop(0.45, C.beachSand);
+        dg.addColorStop(0.80, '#B8A460');
+        dg.addColorStop(1,   'rgba(184,164,96,0)');
+        c.fillStyle = dg;
+        c.beginPath();
+        c.ellipse(dcx, dcy, h.w*0.62, h.h*0.58, 0, 0, Math.PI*2);
+        c.fill();
+        // Shadow at base of dune (gives 3-D feel)
+        c.strokeStyle = 'rgba(100,80,40,0.28)'; c.lineWidth = 2;
+        c.beginPath();
+        c.ellipse(dcx, dcy+h.h*0.18, h.w*0.56, h.h*0.22, 0, 0, Math.PI*2);
+        c.stroke();
+        // Ripple lines across crest
+        c.strokeStyle = 'rgba(200,180,90,0.25)'; c.lineWidth = 1;
+        for(let i=0;i<3;i++){
+          const s=0.25+i*0.15;
+          c.beginPath();
+          c.ellipse(dcx, dcy-h.h*0.05, h.w*s, h.h*s*0.45, 0, 0, Math.PI*2);
+          c.stroke();
+        }
+        // Label
+        c.fillStyle = 'rgba(150,120,50,0.65)'; c.font='bold 7px "Courier New"'; c.textAlign='center';
+        c.fillText('DUNE', dcx, dcy+3); c.textAlign='left';
+      }
     }
 
     // Forest patches
@@ -578,6 +618,7 @@ export class TerrainMap {
     if (this.onRock(x, y) || this.inCityBlock(x, y)) return 0.28;
     if (this.inRiver(x, y))    return 0.12;
     if (this.onBeachSand(x,y)) return 0.78;  // soft sand
+    if (this.onHighGround(x,y) && this.theme===3) return 0.72; // sand dunes / seawall
     if (this.onRoad(x, y))     return 1.28;
     if (this.inForest(x, y))   return 0.65;
     return 1.0;

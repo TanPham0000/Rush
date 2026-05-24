@@ -119,6 +119,10 @@ export class Engine {
   // Survival mode
   _survivalWaveTimer: number=60;   // seconds until next beach wave
 
+  // Special capture node state
+  _radarActive: boolean=false;     // full-map fog reveal
+  _beachGunId:  number|null=null;  // turret entity ID spawned by beach gun capture
+
   private _raf:number=0;
   private _lastTime:number=0;
   private _stTimer:ReturnType<typeof setTimeout>|null=null;
@@ -158,6 +162,7 @@ export class Engine {
     this._blackMarketAbilities=['Artillery Strike','Reinforcements','EMP Burst'];
     this._artilleryTarget=null;
     this._statsTimer=0; this._statsSnaps=[];
+    this._radarActive=false; this._beachGunId=null;
 
     this._ref.buildings=this.buildings;
     this._ref.tibFields=this.tibFields;
@@ -170,28 +175,35 @@ export class Engine {
     const isSurvival = md.mode==='survival';
 
     if (isSurvival && md.preBuilt) {
-      // ── BEACH DEFENCE — pre-built starting layout ─────────
-      // HQ + Economy
+      // ── BEACH DEFENCE — chaos under fire, dawn invasion feel ──
+      // HQ + Economy (slightly inland, safe for now)
       this.buildings.push(new Building(pb.cx,      pb.cy,       'Construction Yard','player'));
-      this.buildings.push(new Building(pb.cx+150,  pb.cy-200,   'Power Plant',      'player'));
-      this.buildings.push(new Building(pb.cx+150,  pb.cy+200,   'Power Plant',      'player'));
-      this.buildings.push(new Building(pb.cx+150,  pb.cy-60,    'Refinery',         'player'));
-      this.buildings.push(new Building(pb.cx+150,  pb.cy+60,    'Refinery',         'player'));
-      this.buildings.push(new Building(pb.cx+300,  pb.cy,       'Barracks',         'player'));
-      this.buildings.push(new Building(pb.cx+300,  pb.cy+160,   'War Factory',      'player'));
-      // Defense turrets along the seawall and defense line
+      this.buildings.push(new Building(pb.cx+160,  pb.cy-210,   'Power Plant',      'player'));
+      this.buildings.push(new Building(pb.cx+160,  pb.cy+210,   'Power Plant',      'player'));
+      this.buildings.push(new Building(pb.cx+160,  pb.cy-60,    'Refinery',         'player'));
+      this.buildings.push(new Building(pb.cx+160,  pb.cy+60,    'Refinery',         'player'));
+      this.buildings.push(new Building(pb.cx+320,  pb.cy,       'Barracks',         'player'));
+      this.buildings.push(new Building(pb.cx+320,  pb.cy+170,   'War Factory',      'player'));
+      // Only 2 turrets — manned positions, barely holding the line
       const turretSpots=[
-        [950, 200],[960, 420],[960, 600],[960, 780],[950,1000], // main line (sandbag positions)
-        [1150,350],[1145,600],[1150,850],                        // forward screen
+        [960, 600],  // centre-road chokepoint
+        [950, 200],  // northern sandbag emplacement
       ];
       for(const[tx,ty] of turretSpots){
         const t=new Turret(tx,ty,'player'); this.buildings.push(t);
       }
-      // Starting infantry in forest cover
-      const infSpots=[[450,280],[470,520],[460,680],[470,920],[620,400],[610,800]];
+      // Infantry scattered at the seawall / forward positions — scramble mode
+      // Mix of Infantry and one Grenadier for variety
+      const infSpots=[
+        [460,160],[480,340],[460,540],[480,760],[460,980],[460,1100], // forest cover belt
+        [920,300],[940,480],[920,720],[940,900],  // sandbag positions (forward)
+        [700,420],[720,720],[700,580],            // mid-field (exposed, scrambling)
+      ];
       for(const[ix,iy] of infSpots){
         const u=new Unit(ix,iy,'player'); u._game=this._ref; this.pUnits.push(u);
       }
+      // One grenadier at the road chokepoint
+      const gren=new Grenadier(960,600,'player'); gren._game=this._ref; this.pUnits.push(gren);
     } else {
       // ── STANDARD maps — minimal starting base ─────────────
       this.buildings.push(new Building(pb.cx,pb.cy,'Construction Yard','player'));
@@ -226,9 +238,17 @@ export class Engine {
     // ── Survival wave timer ───────────────────────────────────
     this._survivalWaveTimer = isSurvival ? 30 : 0;  // first beach wave at 30s
 
+    // ── Starting camera ───────────────────────────────────────
+    if (isSurvival && md.preBuilt) {
+      // Zoom out so the player can see the beach and the approaching threat
+      this._zoom = 0.68;
+      this._camX = 0;
+      this._camY = clamp(pb.cy - VIEW_H/(2*this._zoom), 0, Math.max(0, MAP_H - VIEW_H/this._zoom));
+    }
+
     // ── Capture nodes ─────────────────────────────────────────
     this.captureNodes=md.captureNodes.map(n=>
-      new CaptureNode(n.cx,n.cy,n.label,n.income,n.isCenter,n.isBlackMarket??false)
+      new CaptureNode(n.cx,n.cy,n.label,n.income,n.isCenter,n.isBlackMarket??false,n.isRadar??false,n.isBeachGun??false)
     );
 
     this._recalcPower();
@@ -275,6 +295,11 @@ export class Engine {
 
   // ── FOG OF WAR ────────────────────────────────────────────
   _updateFog(){
+    // Radar tower: full-map vision when captured
+    if(this._radarActive){
+      for(let i=0;i<this._fogGrid.length;i++) this._fogGrid[i]=2;
+      return;
+    }
     for(let i=0;i<this._fogGrid.length;i++){if(this._fogGrid[i]===2)this._fogGrid[i]=1;}
     const entities:{cx:number;cy:number;revealR:number}[]=[
       ...this.pUnits.map(u=>{
@@ -573,6 +598,11 @@ export class Engine {
     const px=-ny, py=nx;
     const ROW_SZ=6, SPACING=34;
     movers.forEach((u,i)=>{
+      // ── Harvester: break out of auto-harvest AI on player command ──
+      if(u instanceof Harvester){
+        (u as Harvester).state='idle';
+        (u as Harvester).targetField=null;
+      }
       const row=Math.floor(i/ROW_SZ);
       const posInRow=i%ROW_SZ;
       const rowSize=Math.min(ROW_SZ, movers.length-row*ROW_SZ);
@@ -715,6 +745,31 @@ export class Engine {
         sound.captureNode();
         this.setStatus('Black Market captured! 3 special abilities available!','success');
         this._flashMsgs.push({text:'BLACK MARKET!',x:n.cx,y:n.cy-60,t:3,maxT:3,color:C.blackMarket});
+      }
+      // ── Radar Tower — full-map vision while held ─────────────
+      if(n.isRadar){
+        const wasActive=this._radarActive;
+        this._radarActive=(n.team==='player');
+        if(!wasActive&&this._radarActive){
+          sound.captureNode();
+          this.setStatus('RADAR ONLINE — full map revealed!','success');
+          this._flashMsgs.push({text:'RADAR ONLINE!',x:n.cx,y:n.cy-60,t:3,maxT:3,color:'#00FFCC'});
+        } else if(wasActive&&!this._radarActive){
+          this.setStatus('RADAR lost — fog of war restored','warn');
+        }
+      }
+      // ── Beach Gun — spawns a long-range coastal cannon ───────
+      if(n.isBeachGun&&!n.beachGunSpawned&&n.team==='player'){
+        n.beachGunSpawned=true;
+        const bg=new Turret(n.cx,n.cy,'player');
+        bg.atkRange=340; bg.atkDmg=78; bg.atkRate=0.85;
+        this.buildings.push(bg);
+        this._ref.buildings=this.buildings;
+        this._beachGunId=bg.id;
+        this._recalcPower();
+        sound.captureNode();
+        this.setStatus('BEACH GUN online — coastal cannon active!','success');
+        this._flashMsgs.push({text:'BEACH GUN!',x:n.cx,y:n.cy-60,t:3,maxT:3,color:C.enemyAccent});
       }
     }
 
@@ -1089,7 +1144,7 @@ export class Engine {
       const q=this._queues.get(selBld.id)??[];
       selBuildingQueue.set({head:q[0]?{type:q[0].type,pct:1-q[0].timer/q[0].maxTimer}:null,rest:q.slice(1).map(qi=>qi.type)});
     } else { selBuildingQueue.set({head:null,rest:[]}); }
-    captureNodesState.set(this.captureNodes.map(n=>({label:n.label,team:n.team,progress:n.progress,isCenter:n.isCenter,isBlackMarket:n.isBlackMarket,holdTimer:n.holdTimer})));
+    captureNodesState.set(this.captureNodes.map(n=>({label:n.label,team:n.team,progress:n.progress,isCenter:n.isCenter,isBlackMarket:n.isBlackMarket,isRadar:n.isRadar,isBeachGun:n.isBeachGun,holdTimer:n.holdTimer})));
     const center=this.captureNodes.find(n=>n.isCenter);
     holdProgress.set(center?center.holdTimer:0);
     selected.set([...this._selected]);

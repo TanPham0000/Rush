@@ -113,8 +113,10 @@
       class:player={n.team === 'player'}
       class:enemy={n.team === 'enemy'}
       class:bmarket={n.isBlackMarket}
+      class:radar={n.isRadar}
+      class:beachgun={n.isBeachGun}
       title={n.label}>
-      <span class="node-label">{n.isBlackMarket ? '◈' : n.label.split(' ')[0]}</span>
+      <span class="node-label">{n.isBlackMarket ? '◈' : n.isRadar ? '📡' : n.isBeachGun ? '🔫' : n.label.split(' ')[0]}</span>
     </div>
     {/each}
   </div>
@@ -417,6 +419,10 @@
   .node-pip.enemy   { border-color:#FF4422; background:rgba(255,68,34,0.1); color:#FF9966; }
   .node-pip.bmarket { border-color:#AA8800; background:rgba(200,160,0,0.12); color:#FFD700; }
   .node-pip.player.bmarket { border-color:#FFD700; background:rgba(255,215,0,0.18); }
+  .node-pip.radar   { border-color:#006688; background:rgba(0,200,200,0.08); color:#00CCDD; }
+  .node-pip.player.radar { border-color:#00FFCC; background:rgba(0,255,200,0.15); color:#00FFCC; }
+  .node-pip.beachgun { border-color:#884400; background:rgba(255,100,0,0.08); color:#FF8844; }
+  .node-pip.player.beachgun { border-color:#FF6600; background:rgba(255,100,0,0.16); color:#FFAA44; }
   .node-label { font-size:7px; letter-spacing:0.5px; }
   .wave-box { display:flex; justify-content:space-between; align-items:center; padding:4px 10px; font-size:9px; color:#557755; border-bottom:1px solid #1A2E1A; background:#0B120B; transition:background 0.3s; }
   .wave-box.incoming { background:#1A0A08; color:#FF4422; }

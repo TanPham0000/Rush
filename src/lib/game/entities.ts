@@ -304,13 +304,18 @@ export class CaptureNode {
   income:       number;
   isCenter:     boolean;
   isBlackMarket:boolean;
+  isRadar:      boolean;
+  isBeachGun:   boolean;
   holdTimer:    number = 0;
   label:        string;
   blackMarketClaimed: boolean = false;
+  beachGunSpawned:    boolean = false;
+  radarActivated:     boolean = false;
 
-  constructor(cx:number,cy:number,label:string,income=4,isCenter=false,isBlackMarket=false){
+  constructor(cx:number,cy:number,label:string,income=4,isCenter=false,isBlackMarket=false,isRadar=false,isBeachGun=false){
     this.id=nextId(); this.cx=cx; this.cy=cy; this.label=label;
     this.income=income; this.isCenter=isCenter; this.isBlackMarket=isBlackMarket;
+    this.isRadar=isRadar; this.isBeachGun=isBeachGun;
   }
 
   update(dt:number,pUnits:Unit[],eUnits:Unit[]){
@@ -355,8 +360,21 @@ export class CaptureNode {
     }
 
     ctx.fillStyle='#FFFFFF'; ctx.font='bold 7px "Courier New"'; ctx.textAlign='center';
-    ctx.fillText(this.isBlackMarket?'🏴 '+this.label:this.label,this.cx,this.cy+this.radius+14);
+    const nodeLabel = this.isBlackMarket?'🏴 '+this.label
+                    : this.isRadar   ?'📡 '+this.label
+                    : this.isBeachGun?'🔫 '+this.label
+                    : this.label;
+    ctx.fillText(nodeLabel,this.cx,this.cy+this.radius+14);
     if(this.team!=='neutral'){ctx.fillStyle=col; ctx.fillText(this.team.toUpperCase(),this.cx,this.cy+5);}
+    // Special node icons
+    if(this.isRadar){
+      ctx.fillStyle=this.team==='player'?'#00FFCC':'#888'; ctx.font='bold 10px "Courier New"'; ctx.textAlign='center';
+      ctx.fillText('📡',this.cx,this.cy+4); ctx.textAlign='left';
+    }
+    if(this.isBeachGun&&!this.beachGunSpawned){
+      ctx.fillStyle=this.team==='player'?'#FF6600':'#888'; ctx.font='bold 10px "Courier New"'; ctx.textAlign='center';
+      ctx.fillText('🔫',this.cx,this.cy+4); ctx.textAlign='left';
+    }
     ctx.textAlign='left';
   }
 }
@@ -530,8 +548,18 @@ export class Unit extends Entity {
     this.y=clamp(this.y,this.radius,MAP_H-this.radius);
   }
 
+  // ── Rock-Paper-Scissors damage multiplier ─────────────────
+  // Infantry: weak vs armour, fine vs infantry.
+  targetMult(t: Entity): number {
+    if (t instanceof Tank || t instanceof HeavyTank) return 0.50;
+    // EnemyUnit tanks checked by isTank flag (avoid circular refs at class level)
+    if (t instanceof EnemyUnit && (t as EnemyUnit).isTank) return 0.50;
+    return 1.0;
+  }
+
   _makeProjectile(target:Entity): Projectile {
-    const p=new Projectile(this.x,this.y,target,this.atkDmg,420,this.projColor);
+    const dmg = this.atkDmg * this.targetMult(target);
+    const p=new Projectile(this.x,this.y,target,dmg,420,this.projColor);
     p.firedBy=this;
     return p;
   }
@@ -636,8 +664,15 @@ export class Grenadier extends Unit {
     this.projColor=team==='player'?'#FF8800':'#FF6600';
   }
 
+  // Grenades: weaker vs armour (glancing hit), splash punishes infantry clusters
+  targetMult(t: Entity): number {
+    if (t instanceof Tank || t instanceof HeavyTank) return 0.65;
+    if (t instanceof EnemyUnit && (t as EnemyUnit).isTank) return 0.65;
+    return 1.0;
+  }
+
   _makeProjectile(target:Entity): Projectile {
-    const p=new Projectile(this.x,this.y,target,this.atkDmg,380,this.projColor);
+    const p=new Projectile(this.x,this.y,target,this.atkDmg*this.targetMult(target),380,this.projColor);
     p.splash=this.splashRadius; p.firedBy=this;
     return p;
   }
@@ -664,6 +699,16 @@ export class Tank extends Unit {
     this.atkDmg=46; this.atkRange=100; this.atkRate=0.65;
     this.projColor=team==='player'?'#FFDD44':'#FF8800';
     this.autoAtkRange=180;
+  }
+
+  // Tank: strong vs infantry/artillery, mirror matchup vs other tanks
+  targetMult(t: Entity): number {
+    if (t instanceof Artillery) return 1.40;
+    if (t instanceof HeavyTank) return 0.85;
+    if (t instanceof Tank)      return 0.90;
+    if (t instanceof EnemyUnit && (t as EnemyUnit).isTank) return 0.90;
+    if (t instanceof Unit)      return 1.50;  // light infantry crushed
+    return 1.0;
   }
 
   update(dt:number,allUnits:Unit[],projectiles:Projectile[]){
@@ -701,6 +746,16 @@ export class HeavyTank extends Tank {
     this.projColor=team==='player'?'#00AAFF':'#FF4400';
   }
 
+  // Heavy Tank: dominates infantry, respectable vs other armour
+  targetMult(t: Entity): number {
+    if (t instanceof Artillery) return 1.60;
+    if (t instanceof Tank)      return 1.10;
+    if (t instanceof HeavyTank) return 0.90;
+    if (t instanceof EnemyUnit && (t as EnemyUnit).isTank) return 1.00;
+    if (t instanceof Unit)      return 1.90;  // infantry are roadkill
+    return 1.0;
+  }
+
   draw(ctx:CanvasRenderingContext2D,dotMode=false){
     if(dotMode){ctx.beginPath();ctx.arc(this.x,this.y,6,0,Math.PI*2);ctx.fillStyle=this.team==='player'?'#00AAFF':'#FF4400';ctx.fill();return;}
     super.draw(ctx,dotMode);
@@ -724,6 +779,14 @@ export class Artillery extends Unit {
     this.radius=14; this.speed=30; this.hp=this.maxHp=180;
     this.atkDmg=85; this.atkRange=280; this.atkRate=0.35;
     this.autoAtkRange=300; this.projColor=team==='player'?'#FFEE00':'#FF6600';
+  }
+
+  // Artillery: best vs static/clustered targets; struggles vs mobile armour
+  targetMult(t: Entity): number {
+    if (t instanceof Building)  return 2.00;  // siege weapon
+    if (t instanceof Tank || t instanceof HeavyTank) return 0.60;
+    if (t instanceof EnemyUnit && (t as EnemyUnit).isTank) return 0.60;
+    return 1.0;
   }
 
   takeDmg(d:number){
@@ -821,6 +884,15 @@ export class Scout extends Unit {
     this.projColor=team==='player'?'#00FFCC':'#FF8844';
   }
 
+  // Scout: excellent vs artillery (harassment), useless vs armour
+  targetMult(t: Entity): number {
+    if (t instanceof Artillery) return 1.60;
+    if (t instanceof Tank || t instanceof HeavyTank) return 0.20;
+    if (t instanceof EnemyUnit && (t as EnemyUnit).isTank) return 0.20;
+    if (t instanceof Building)  return 0.35;
+    return 1.0;
+  }
+
   draw(ctx:CanvasRenderingContext2D,dotMode=false){
     if(dotMode){ctx.beginPath();ctx.arc(this.x,this.y,3,0,Math.PI*2);ctx.fillStyle='#00FFCC';ctx.fill();return;}
     const pl=this.team==='player'; const r=this.radius;
@@ -855,14 +927,12 @@ export class AntitankGun extends Unit {
     this.projColor=team==='player'?'#FF4400':'#FF8800';
   }
 
-  _makeProjectile(target:Entity): Projectile {
-    // Extra damage vs tanks
-    let dmg=this.atkDmg;
-    if(target instanceof Tank||target instanceof HeavyTank) dmg*=1.6;
-    if(target instanceof Unit&&!(target instanceof Tank)&&!(target instanceof HeavyTank)&&target.radius<=8) dmg*=0.55;
-    const p=new Projectile(this.x,this.y,target,dmg,520,this.projColor);
-    p.firedBy=this;
-    return p;
+  // Anti-tank gun: specialist armour-killer, hopeless vs light infantry
+  targetMult(t: Entity): number {
+    if (t instanceof Tank || t instanceof HeavyTank) return 1.60;
+    if (t instanceof EnemyUnit && (t as EnemyUnit).isTank) return 1.60;
+    if (t instanceof Unit && t.radius <= 8) return 0.45; // tiny infantry target
+    return 0.85;
   }
 
   update(dt:number,allUnits:Unit[],projectiles:Projectile[]){
@@ -913,6 +983,7 @@ export class Harvester extends Unit {
     if(!this._refinery?.isAlive()) this._refinery=g.buildings.find(b=>b.type==='Refinery'&&b.team==='player')??null;
     if(this.state==='idle'){
       if(!this._refinery)return;
+      if(this.moveTarget)return; // respect player move command — wait until we arrive
       const field=g.tibFields.filter(f=>f.remaining>=20).sort((a,b)=>{
         const sA=a.remaining/Math.max(1,hypot(this.x,this.y,a.cx,a.cy));
         const sB=b.remaining/Math.max(1,hypot(this.x,this.y,b.cx,b.cy));

@@ -67,6 +67,8 @@ export interface NodeState {
   progress: number;
   isCenter: boolean;
   isBlackMarket: boolean;
+  isRadar: boolean;
+  isBeachGun: boolean;
   holdTimer: number;
 }
 export const captureNodesState = writable<NodeState[]>([]);
