@@ -83,3 +83,8 @@ export const blackMarketAbilities = writable<string[]>([]);
 export interface StatSnap { t: number; kills: number; produced: number; credits: number }
 export const statsHistory  = writable<StatSnap[]>([]);
 export const gameTimeElapsed = writable(0);
+
+// ── Survival mode ─────────────────────────────────────────────
+export const survivalMode     = writable(false);
+export const survivalTimeLeft = writable(0);    // seconds remaining
+export const survivalTotal    = writable(900);  // duration in seconds

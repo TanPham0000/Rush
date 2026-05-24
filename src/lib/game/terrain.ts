@@ -36,7 +36,8 @@ export class TerrainMap {
   private _initLayout() {
     if (this.theme === 0) this._initRivers();
     else if (this.theme === 1) this._initHills();
-    else this._initCity();
+    else if (this.theme === 2) this._initCity();
+    else this._initBeach();
   }
 
   // ── RIVERS layout ──────────────────────────────────────
@@ -132,7 +133,8 @@ export class TerrainMap {
   private _render() {
     if (this.theme === 0) this._renderRivers();
     else if (this.theme === 1) this._renderHills();
-    else this._renderCity();
+    else if (this.theme === 2) this._renderCity();
+    else this._renderBeach();
   }
 
   // ══════════════════════════════════════════════════════════
@@ -374,6 +376,132 @@ export class TerrainMap {
     for (let y = 0; y < MAP_H; y += GRID) { c.beginPath(); c.moveTo(0,y); c.lineTo(MAP_W,y); c.stroke(); }
   }
 
+  // ══════════════════════════════════════════════════════════
+  // THEME 3 — BEACH DEFENCE
+  // ══════════════════════════════════════════════════════════
+  // Layout (left=player HQ, right=ocean):
+  //   x 0–350    : HQ / clear ground
+  //   x 350–700  : forest belt (cover)
+  //   x 700–1100 : open plains (defense line)
+  //   x 1100–1380: approach zone
+  //   x 1380–1460: seawall / embankment (high ground)
+  //   x 1460–1700: beach sand
+  //   x 1700–1800: waterline
+  private _initBeach() {
+    // Forest belt — infantry cover left of defense line
+    (this.forests as ForestZone[]).push(
+      { x:  340, y:    0, w: 350, h: 280 },
+      { x:  340, y:  400, w: 300, h: 250 },
+      { x:  340, y:  720, w: 320, h: 260 },
+      { x:  340, y: 1060, w: 340, h: 140 },
+      { x:  650, y:  200, w: 180, h: 160 },
+      { x:  640, y:  840, w: 200, h: 180 },
+    );
+    // Seawall / embankment — full-height ridge, gives range bonus
+    (this.highGround as HighGround[]).push(
+      { x: 1380, y:   0, w: 80, h: MAP_H },
+    );
+    // Sandbag positions — cover clusters in the defense line and approach
+    (this.rocks as RockCluster[]).push(
+      // Main defense line (~x=950)
+      { cx:  950, cy:  200, r: 28 }, { cx:  975, cy:  450, r: 32 },
+      { cx:  960, cy:  600, r: 30 }, { cx:  975, cy:  760, r: 32 },
+      { cx:  950, cy: 1000, r: 28 },
+      // Forward positions (~x=1150)
+      { cx: 1160, cy:  320, r: 24 }, { cx: 1140, cy:  600, r: 26 },
+      { cx: 1160, cy:  880, r: 24 },
+      // Beach wreckage
+      { cx: 1560, cy:  300, r: 20 }, { cx: 1580, cy:  600, r: 22 },
+      { cx: 1560, cy:  900, r: 20 },
+    );
+  }
+
+  private _renderBeach() {
+    const c = this._off.getContext('2d')!;
+
+    // Base: grassy ground on the left, sandy beach on the right
+    const bgGrad = c.createLinearGradient(0, 0, MAP_W, 0);
+    bgGrad.addColorStop(0,    '#263818');  // dark forest left
+    bgGrad.addColorStop(0.35, C.ground);  // grassy center-left
+    bgGrad.addColorStop(0.62, '#8A9A60'); // transitional scrub
+    bgGrad.addColorStop(0.78, C.beachSand);
+    bgGrad.addColorStop(0.94, C.beachShore);
+    bgGrad.addColorStop(1.0,  '#B8A868');
+    c.fillStyle = bgGrad; c.fillRect(0, 0, MAP_W, MAP_H);
+
+    // Waterline gradient (right ~200px)
+    const waterGrad = c.createLinearGradient(1650, 0, MAP_W, 0);
+    waterGrad.addColorStop(0, 'rgba(26,90,154,0)');
+    waterGrad.addColorStop(0.3, 'rgba(26,90,154,0.7)');
+    waterGrad.addColorStop(1.0, C.beachWater);
+    c.fillStyle = waterGrad; c.fillRect(1650, 0, MAP_W - 1650, MAP_H);
+
+    // Grid
+    c.strokeStyle = 'rgba(0,200,70,0.05)'; c.lineWidth = 0.5;
+    for (let x = 0; x < MAP_W; x += GRID) { c.beginPath(); c.moveTo(x,0); c.lineTo(x,MAP_H); c.stroke(); }
+    for (let y = 0; y < MAP_H; y += GRID) { c.beginPath(); c.moveTo(0,y); c.lineTo(MAP_W,y); c.stroke(); }
+
+    // Horizontal coastal road running behind defense line
+    c.fillStyle = C.road;
+    c.fillRect(0, 576, 1380, 18);
+    c.strokeStyle = 'rgba(160,140,60,0.3)'; c.lineWidth=1; c.setLineDash([10,14]);
+    c.beginPath(); c.moveTo(0,585); c.lineTo(1380,585); c.stroke(); c.setLineDash([]);
+
+    // Seawall / embankment
+    for (const h of this.highGround) {
+      const sg = c.createLinearGradient(h.x,0,h.x+h.w,0);
+      sg.addColorStop(0,  C.seawall);
+      sg.addColorStop(0.4,'#6A5E48');
+      sg.addColorStop(1,  '#4A4030');
+      c.fillStyle = sg; c.fillRect(h.x, h.y, h.w, h.h);
+      // Wall texture lines
+      c.strokeStyle = 'rgba(0,0,0,0.3)'; c.lineWidth = 1;
+      for (let y = 0; y < MAP_H; y += 28) c.strokeRect(h.x+4, y+4, h.w-8, 20);
+      c.fillStyle = 'rgba(200,180,100,0.45)'; c.font='bold 8px "Courier New"'; c.textAlign='center';
+      c.fillText('SEAWALL', h.x+h.w/2, MAP_H/2+4); c.textAlign='left';
+    }
+
+    // Forest patches
+    for (const f of this.forests) { c.fillStyle=C.forest; c.fillRect(f.x,f.y,f.w,f.h); }
+    for (const t of this._trees) {
+      c.beginPath(); c.arc(t.x,t.y,t.r,0,Math.PI*2); c.fillStyle=t.shade; c.fill();
+      c.beginPath(); c.arc(t.x-t.r*0.25,t.y-t.r*0.25,t.r*0.42,0,Math.PI*2);
+      c.fillStyle='rgba(60,90,30,0.4)'; c.fill();
+    }
+
+    // Sandbag / debris positions
+    for (const r of this.rocks) {
+      c.beginPath(); c.ellipse(r.cx+3,r.cy+3,r.r*1.3,r.r*0.7,0,0,Math.PI*2);
+      c.fillStyle='rgba(0,0,0,0.25)'; c.fill();
+      // Sandbag color (brown/tan stacks)
+      c.beginPath(); c.ellipse(r.cx,r.cy,r.r*1.3,r.r*0.7,0,0,Math.PI*2);
+      c.fillStyle=C.sandbag; c.fill();
+      c.beginPath(); c.ellipse(r.cx,r.cy-r.r*0.22,r.r*0.9,r.r*0.45,0,0,Math.PI*2);
+      c.fillStyle='#9A8A60'; c.fill();
+      c.strokeStyle='rgba(0,0,0,0.3)'; c.lineWidth=1; c.stroke();
+      // Seams
+      for(let i=-1;i<=1;i+=2){
+        c.beginPath(); c.ellipse(r.cx+i*r.r*0.38,r.cy,r.r*0.35,r.r*0.55,0,0,Math.PI*2);
+        c.strokeStyle='rgba(0,0,0,0.2)'; c.lineWidth=1; c.stroke();
+      }
+      c.fillStyle='rgba(180,160,80,0.55)'; c.font='bold 7px "Courier New"'; c.textAlign='center';
+      c.fillText('COVER',r.cx,r.cy+r.r*0.5+7); c.textAlign='left';
+    }
+
+    // Sand ripple texture in beach zone
+    c.strokeStyle='rgba(160,140,80,0.18)'; c.lineWidth=1;
+    for(let y=0;y<MAP_H;y+=18){
+      c.beginPath();
+      c.moveTo(1460,y);
+      for(let x=1460;x<1700;x+=30) c.quadraticCurveTo(x+15,y+(x%60===0?4:-4),x+30,y);
+      c.stroke();
+    }
+
+    // "OCEAN" label
+    c.fillStyle='rgba(100,160,220,0.45)'; c.font='bold 22px "Courier New"'; c.textAlign='center';
+    c.fillText('OCEAN', MAP_W-75, MAP_H/2+8); c.textAlign='left';
+  }
+
   // ── Shared rock drawer ───────────────────────────────────
   private _drawRocks(c: CanvasRenderingContext2D) {
     for (const r of this.rocks) {
@@ -393,6 +521,10 @@ export class TerrainMap {
   // ══════════════════════════════════════════════════════════
   // QUERY METHODS
   // ══════════════════════════════════════════════════════════
+  onBeachSand(x: number, _y: number): boolean {
+    return this.theme === 3 && x > 1460;
+  }
+
   onBridge(x: number, y: number): boolean {
     if (this.theme !== 0) return false;
     const rx = this.riverX(y);
@@ -423,12 +555,19 @@ export class TerrainMap {
       const ny = ((y % gs) + gs) % gs;
       return nx < 18 || nx > gs-18 || ny < 18 || ny > gs-18;
     }
+    if (this.theme === 3) return Math.abs(y-585)<9 && x < 1380;  // coastal road
     return false;
   }
 
   onRock(x: number, y: number): boolean {
-    if (this.rocks.some(r => Math.hypot(x-r.cx, y-r.cy) < r.r)) return true;
-    return false;
+    if (this.theme === 3) {
+      // Beach sandbags use an ellipse (wider than tall)
+      return this.rocks.some(r => {
+        const dx=(x-r.cx)/(r.r*1.3), dy=(y-r.cy)/(r.r*0.7);
+        return dx*dx+dy*dy < 1;
+      });
+    }
+    return this.rocks.some(r => Math.hypot(x-r.cx, y-r.cy) < r.r);
   }
 
   inCityBlock(x: number, y: number): boolean {
@@ -437,9 +576,10 @@ export class TerrainMap {
 
   speedMult(x: number, y: number): number {
     if (this.onRock(x, y) || this.inCityBlock(x, y)) return 0.28;
-    if (this.inRiver(x, y)) return 0.12;
-    if (this.onRoad(x, y))  return 1.28;
-    if (this.inForest(x, y)) return 0.65;
+    if (this.inRiver(x, y))    return 0.12;
+    if (this.onBeachSand(x,y)) return 0.78;  // soft sand
+    if (this.onRoad(x, y))     return 1.28;
+    if (this.inForest(x, y))   return 0.65;
     return 1.0;
   }
 
@@ -458,7 +598,6 @@ export class TerrainMap {
     ctx.drawImage(this._off, 0, 0);
     if (this.theme === 0) {
       // Animated river ripples
-      const steps = 6;
       ctx.save();
       ctx.globalAlpha = 0.11 + 0.04 * Math.sin(t * 1.8);
       ctx.strokeStyle = '#5599CC'; ctx.lineWidth = 1.2;
@@ -467,6 +606,31 @@ export class TerrainMap {
         const rx = this.riverX(yOff);
         ctx.beginPath(); ctx.moveTo(rx-this.rW*0.3,yOff); ctx.lineTo(rx+this.rW*0.3,yOff); ctx.stroke();
       }
+      ctx.restore();
+    } else if (this.theme === 3) {
+      // Animated ocean waves scrolling left from right edge
+      ctx.save();
+      const waveOffset = (t * 28) % 80;
+      ctx.globalAlpha = 0.22 + 0.10 * Math.sin(t * 2.1);
+      ctx.strokeStyle = C.beachFoam; ctx.lineWidth = 1.5;
+      for (let y = 0; y < MAP_H; y += 20) {
+        const baseX = 1700 + waveOffset;
+        ctx.beginPath();
+        for (let wx = baseX; wx < MAP_W + 60; wx += 80) {
+          ctx.moveTo(wx, y);
+          ctx.quadraticCurveTo(wx+20, y + 5 * Math.sin(t*3+y*0.05), wx+40, y);
+        }
+        ctx.stroke();
+      }
+      // Foam line at waterline
+      ctx.globalAlpha = 0.35 + 0.15 * Math.sin(t * 1.6);
+      ctx.strokeStyle = C.beachFoam; ctx.lineWidth = 3;
+      ctx.beginPath();
+      for (let y = 0; y < MAP_H; y += 4) {
+        const wx = 1698 + 12 * Math.sin(t * 1.4 + y * 0.04);
+        if (y === 0) ctx.moveTo(wx, y); else ctx.lineTo(wx, y);
+      }
+      ctx.stroke();
       ctx.restore();
     }
   }

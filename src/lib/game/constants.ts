@@ -24,6 +24,8 @@ export const C = {
   riverShim:  '#2277CC', highGround: '#3C4A22', rocks:      '#38342E', bridge:'#4A4436',
   cityBlock:  '#2A2E2A', cityRoad:   '#1E201A', cityWall:   '#353830',
   hillsLow:   '#2A3A18', hillsHigh:  '#4A5C28', hillsMid:   '#384A20',
+  beachSand:  '#C8B97A', beachShore: '#A89A58', beachWater: '#1A5A9A',
+  beachFoam:  '#DDEEFF', seawall:    '#5A5040', sandbag:    '#8A7A50',
   captureNeutral: '#888888', capturePlayer: '#3399FF', captureEnemy: '#FF4422',
   blackMarket:    '#FFD700',
   uiBg:     '#07090A', uiPanel:  '#0D1210', uiBorder: '#1E3A1E',
@@ -96,7 +98,7 @@ export const ENDLESS_INTERVAL = 38;
 export const HOLD_WIN_TIME = 120;
 
 // ── CAMPAIGN MAP DEFINITIONS ─────────────────────────────────
-export type MapTheme = 0 | 1 | 2;   // 0=rivers, 1=hills, 2=city
+export type MapTheme = 0 | 1 | 2 | 3;   // 0=rivers, 1=hills, 2=city, 3=beach
 
 export interface CaptureNodeDef {
   cx: number; cy: number; label: string; income: number;
@@ -104,18 +106,22 @@ export interface CaptureNodeDef {
 }
 
 export interface MapDef {
-  id:           number;
-  name:         string;
-  subtitle:     string;
-  description:  string;
-  theme:        MapTheme;
-  startCredits: number;
-  waveScale:    number;   // multiplier on wave infantry/tank counts
-  enemyHpScale: number;   // multiplier on enemy unit HP
-  playerBase:   { cx: number; cy: number };
-  enemyBase:    { cx: number; cy: number };
-  captureNodes: CaptureNodeDef[];
-  tibFields:    { cx: number; cy: number }[];
+  id:               number;
+  name:             string;
+  subtitle:         string;
+  description:      string;
+  theme:            MapTheme;
+  startCredits:     number;
+  waveScale:        number;
+  enemyHpScale:     number;
+  playerBase:       { cx: number; cy: number };
+  enemyBase:        { cx: number; cy: number };
+  captureNodes:     CaptureNodeDef[];
+  tibFields:        { cx: number; cy: number }[];
+  // ── Survival / Beach Defence fields ─────────────────────
+  mode?:            'standard' | 'survival'; // default 'standard'
+  survivalDuration?:number;                  // seconds to survive
+  preBuilt?:        boolean;                 // engine places opening base
 }
 
 export const MAPS: MapDef[] = [
@@ -189,5 +195,26 @@ export const MAPS: MapDef[] = [
       [300,200],[350,1000],[700,450],[700,750],
       [1100,300],[1100,900],[1400,500],[1500,800],[900,1050],
     ].map(([cx,cy]) => ({ cx, cy })),
+  },
+
+  // ── MAP 3: BEACH DEFENCE ─────────────────────────────────
+  {
+    id: 3,
+    name: 'BEACH DEFENCE',
+    subtitle: 'HOLD THE LINE',
+    description: 'Amphibious assault from the ocean. Endless waves break against your seawall. Dig in and survive 15 minutes.',
+    theme: 3,
+    startCredits: 2500,
+    waveScale:    1.0,
+    enemyHpScale: 1.0,
+    playerBase:   { cx: 200, cy: 600 },
+    enemyBase:    { cx: 1760, cy: 600 },
+    captureNodes: [],
+    tibFields: [
+      [300, 280], [300, 920], [560, 200], [560, 1000], [820, 420], [820, 780],
+    ].map(([cx,cy]) => ({ cx, cy })),
+    mode:             'survival',
+    survivalDuration: 900,
+    preBuilt:         true,
   },
 ];

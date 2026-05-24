@@ -7,6 +7,7 @@
     campaignMap, paused,
     statsHistory, gameTimeElapsed,
     enemiesKilled, unitsLost, unitsProduced,
+    survivalMode, survivalTimeLeft, survivalTotal,
   } from '$lib/stores/gameStore';
   import type { StatSnap } from '$lib/stores/gameStore';
   import { MAPS } from '$lib/game/constants';
@@ -20,8 +21,9 @@
   let wrapper: HTMLDivElement;
 
   // Menu state
-  let menuMode    = $state<'campaign' | 'skirmish'>('campaign');
+  let menuMode    = $state<'campaign' | 'skirmish' | 'codex'>('campaign');
   let skirmishMap = $state(0);
+  let codexUnit   = $state(0);   // selected unit index in codex
   let muted       = $state(false);
 
   function toggleMute() { muted = sound.toggleMute(); }
@@ -51,6 +53,56 @@
     return `${m}m ${s.toString().padStart(2, '0')}s`;
   }
 
+  function fmtCountdown(secs: number): string {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  // ── UNIT CODEX DATA ──────────────────────────────────────────
+  const CODEX = [
+    { name:'INFANTRY',     role:'ASSAULT',    roles:['ANTI-INFANTRY','GARRISON'],
+      hp:100, spd:65,  atk:15,  rng:55,  cost:50,
+      color:'#44AAFF', shape:'circle',
+      lore:'Backbone of any force. Cheap, versatile, and effective in cover. Suppresses enemies and holds objectives.',
+    },
+    { name:'GRENADIER',    role:'SPLASH',     roles:['SPLASH DMG','ANTI-INFANTRY'],
+      hp:110, spd:60,  atk:18,  rng:70,  cost:80,
+      color:'#FF8800', shape:'circle',
+      lore:'Lobbing grenades that scatter shrapnel. Clears trenches and punishes clustered enemies brutally.',
+    },
+    { name:'ANTI-TANK GUN',role:'ANTI-ARMOR', roles:['ANTI-ARMOR','HEAVY HIT'],
+      hp:140, spd:42,  atk:72,  rng:120, cost:120,
+      color:'#FF4400', shape:'square',
+      lore:'Slow but devastating. Fires armour-piercing rounds that shred tank hulls. Weak against infantry.',
+    },
+    { name:'SCOUT CAR',    role:'RECON',      roles:['RECON','FAST','VISION'],
+      hp:45,  spd:135, atk:8,   rng:55,  cost:80,
+      color:'#00FFCC', shape:'diamond',
+      lore:'Fastest unit on the field. Reveals wide fog-of-war and flanks artillery. Fragile in a firefight.',
+    },
+    { name:'TANK',         role:'ARMOR',      roles:['FLANKING','ARMOR','ASSAULT'],
+      hp:320, spd:32,  atk:46,  rng:100, cost:400,
+      color:'#FFDD44', shape:'square',
+      lore:'Main battle tank. Powerful cannon crushes anything it flanks. Vulnerable to AT guns from the front.',
+    },
+    { name:'HEAVY TANK',   role:'BREAKTHROUGH',roles:['ARMORED','HIGH HP','ASSAULT'],
+      hp:500, spd:26,  atk:60,  rng:100, cost:600,
+      color:'#00AAFF', shape:'square',
+      lore:'A rolling fortress. Takes enormous punishment and dishes it back. Requires Tech Lab and War Factory.',
+    },
+    { name:'ARTILLERY',    role:'SUPPORT',    roles:['LONG RANGE','SPLASH','DEPLOY'],
+      hp:180, spd:30,  atk:85,  rng:280, cost:550,
+      color:'#FFEE00', shape:'square',
+      lore:'Must deploy before firing. Devastating at range, helpless up close. Keep it behind your front line.',
+    },
+    { name:'HARVESTER',    role:'LOGISTICS',  roles:['ECONOMY','UNARMED'],
+      hp:200, spd:62,  atk:0,   rng:0,   cost:0,
+      color:'#DDAA00', shape:'square',
+      lore:'Collects Tiberium and converts it to credits at the Refinery. Protect it at all costs.',
+    },
+  ];
+
   function fitViewport() {
     if (!wrapper) return;
     const s  = Math.min(1, window.innerWidth / TOTAL_W, window.innerHeight / TOTAL_H);
@@ -60,6 +112,7 @@
   }
 
   function startGame() {
+    if (menuMode === 'codex') return;  // no-op from codex tab
     if (menuMode === 'campaign') {
       engine?.restart();
     } else {
@@ -116,9 +169,15 @@
       <span class="sub">REAL-TIME STRATEGY</span>
     </div>
     <div class="hd-center">
-      <span class="wave-badge" class:incoming={$waveIncoming}>
-        {$waveIncoming ? '⚠ WAVE INCOMING' : `WAVE ${$wave}`}
-      </span>
+      {#if $survivalMode && $gameState === 'playing'}
+        <span class="wave-badge survival-badge" class:incoming={$waveIncoming}>
+          {#if $waveIncoming}⚠ WAVE {$wave} INCOMING{:else}⏱ SURVIVE {fmtCountdown($survivalTimeLeft)}{/if}
+        </span>
+      {:else}
+        <span class="wave-badge" class:incoming={$waveIncoming}>
+          {$waveIncoming ? '⚠ WAVE INCOMING' : `WAVE ${$wave}`}
+        </span>
+      {/if}
     </div>
     <div class="hd-right">
       {#if $gameState === 'playing'}
@@ -194,6 +253,9 @@
       <button class="mode-tab" class:active={menuMode==='skirmish'} onclick={() => menuMode = 'skirmish'}>
         ◇ SKIRMISH
       </button>
+      <button class="mode-tab" class:active={menuMode==='codex'} onclick={() => menuMode = 'codex'}>
+        ⊞ CODEX
+      </button>
     </div>
 
     <!-- CAMPAIGN content -->
@@ -231,7 +293,7 @@
     </div>
 
     <!-- SKIRMISH content -->
-    {:else}
+    {:else if menuMode === 'skirmish'}
     <div class="skirmish-panel">
       <div class="map-cards">
         {#each MAPS as m, i}
@@ -240,12 +302,16 @@
           <div class="mc-name">{m.name}</div>
           <div class="mc-sub">{m.subtitle}</div>
           <div class="mc-diff">
-            <span class="mcd-lbl">DIFF</span>
-            <span class="mcd-pips">
-              {#each Array(3) as _, p}
-              <span class="mcd-pip" class:lit={p < Math.ceil(m.waveScale)}></span>
-              {/each}
-            </span>
+            {#if m.mode === 'survival'}
+              <span class="mc-mode-tag">⏱ SURVIVAL</span>
+            {:else}
+              <span class="mcd-lbl">DIFF</span>
+              <span class="mcd-pips">
+                {#each Array(3) as _, p}
+                <span class="mcd-pip" class:lit={p < Math.ceil(m.waveScale)}></span>
+                {/each}
+              </span>
+            {/if}
           </div>
         </button>
         {/each}
@@ -254,12 +320,68 @@
       <div class="briefing sk-brief">
         <div class="brief-hdr">◉ {MAPS[skirmishMap].subtitle}</div>
         <p>{MAPS[skirmishMap].description}</p>
+        {#if MAPS[skirmishMap].mode === 'survival'}
+        <div class="brief-stats">
+          <span class="bstat">
+            <span class="bs-lbl">OBJECTIVE</span>
+            <span class="bs-val" style="font-size:9px">SURVIVE 15:00</span>
+          </span>
+          <span class="bstat">
+            <span class="bs-lbl">START CREDITS</span>
+            <span class="bs-val">{MAPS[skirmishMap].startCredits}¢</span>
+          </span>
+        </div>
+        {/if}
       </div>
       {/if}
     </div>
+
+    <!-- CODEX content -->
+    {:else}
+    <div class="codex-panel">
+      <div class="codex-list">
+        {#each CODEX as u, i}
+        <button class="codex-unit-btn" class:active={codexUnit===i} onclick={() => codexUnit=i}>
+          <span class="cu-icon" style="background:{u.color}22;border-color:{u.color}55;color:{u.color}">{u.name[0]}</span>
+          <span class="cu-name">{u.name}</span>
+          <span class="cu-role">{u.role}</span>
+        </button>
+        {/each}
+      </div>
+      <div class="codex-detail">
+        {#each [CODEX[codexUnit]] as u}
+        <div class="cd-header">
+          <div class="cd-icon" style="background:{u.color}22;border-color:{u.color}77;color:{u.color};box-shadow:0 0 20px {u.color}44">
+            {u.name[0]}
+          </div>
+          <div class="cd-title-block">
+            <div class="cd-name">{u.name}</div>
+            <div class="cd-roles">
+              {#each u.roles as r}<span class="cd-tag">{r}</span>{/each}
+            </div>
+            {#if u.cost > 0}<div class="cd-cost">{u.cost}¢</div>{/if}
+          </div>
+        </div>
+        <div class="cd-lore">{u.lore}</div>
+        <div class="cd-stats">
+          {#each [['HP', u.hp, 500, '#FF4444'], ['SPEED', u.spd, 135, '#44FFAA'],
+                  ['ATTACK', u.atk, 85, '#FFDD44'], ['RANGE', u.rng, 280, '#44AAFF']] as [lbl, val, mx, col]}
+          <div class="cd-stat-row">
+            <span class="cd-stat-lbl">{lbl}</span>
+            <div class="cd-bar-track">
+              <div class="cd-bar-fill" style="width:{Math.round((val/mx)*100)}%;background:{col}"></div>
+            </div>
+            <span class="cd-stat-val">{val}</span>
+          </div>
+          {/each}
+        </div>
+        {/each}
+      </div>
+    </div>
     {/if}
 
-    <!-- Controls & Tips (shared) -->
+    <!-- Controls & Tips (hidden in codex mode) -->
+    {#if menuMode !== 'codex'}
     <div class="menu-divider" style="margin-top:10px"></div>
     <div class="menu-cols">
       <div class="menu-col">
@@ -287,12 +409,14 @@
       <span class="tip">🪨 Rocks give 50% cover</span>
       <span class="tip">◈ Black Market = 3 abilities</span>
       <span class="tip">★ Veterans deal +15% damage</span>
+      <span class="tip">⚔ Flank tanks for +25–40% dmg</span>
     </div>
 
     <button class="start-btn" onclick={startGame}>
       ▶ {menuMode === 'campaign' ? 'START CAMPAIGN' : 'START SKIRMISH'}
     </button>
     <div class="press-hint">or press ENTER</div>
+    {/if}
 
     <div class="menu-disclaimer">
       <p>An ode to Command &amp; Conquer — built from scratch in 48 hours as an act of free will.</p>
@@ -713,6 +837,55 @@
   @keyframes blink-pip   { 0%,100%{opacity:1} 50%{opacity:0.2} }
   @keyframes pulse-warn  { from{opacity:.8} to{opacity:1} }
   @keyframes blink-pause { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+  /* ── SURVIVAL BADGE ────────────────────────────────── */
+  .survival-badge { color: #44CCFF !important; border-color: #226688 !important; background: rgba(0,20,40,0.8) !important; }
+  .survival-badge.incoming { color: #FF3322 !important; border-color: #6A1A0A !important; }
+
+  /* ── SKIRMISH survival tag ──────────────────────────── */
+  .mc-mode-tag { font-size: 7px; color: #44CCFF; letter-spacing: 1px; }
+
+  /* ── CODEX PANEL ───────────────────────────────────── */
+  .codex-panel { display: flex; gap: 12px; margin-bottom: 10px; }
+  .codex-list  { display: flex; flex-direction: column; gap: 3px; min-width: 160px; }
+  .codex-unit-btn {
+    display: flex; align-items: center; gap: 8px;
+    background: #080E08; border: 1px solid #1A3A1A;
+    padding: 5px 8px; cursor: pointer; font-family: inherit; text-align: left;
+    transition: all 0.1s;
+  }
+  .codex-unit-btn:hover { background: #0D180D; border-color: #3A6A3A; }
+  .codex-unit-btn.active { border-color: #00EE55; background: #0A1A0A; }
+  .cu-icon {
+    width: 22px; height: 22px; border: 1px solid; border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: bold; flex-shrink: 0;
+  }
+  .cu-name { font-size: 8px; color: #88CC88; letter-spacing: 0.5px; flex: 1; }
+  .cu-role { font-size: 7px; color: #3A6A3A; }
+
+  .codex-detail { flex: 1; background: rgba(0,15,5,0.4); border: 1px solid #1A3A1A; padding: 12px 14px; }
+  .cd-header   { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+  .cd-icon     {
+    width: 48px; height: 48px; border: 2px solid; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: bold; flex-shrink: 0;
+  }
+  .cd-title-block { flex: 1; }
+  .cd-name  { font-size: 13px; font-weight: bold; color: #AAFFAA; letter-spacing: 2px; margin-bottom: 4px; }
+  .cd-roles { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px; }
+  .cd-tag   { font-size: 7px; padding: 1px 5px; border: 1px solid #2A5A2A; background: rgba(0,40,10,0.4); color: #66AA66; letter-spacing: 1px; }
+  .cd-cost  { font-size: 10px; color: #FFDD44; letter-spacing: 1px; }
+
+  .cd-lore { font-size: 9px; color: #6A9A6A; line-height: 1.65; margin-bottom: 12px; border-left: 2px solid #1A4A1A; padding-left: 8px; }
+
+  .cd-stats { display: flex; flex-direction: column; gap: 6px; }
+  .cd-stat-row { display: flex; align-items: center; gap: 8px; }
+  .cd-stat-lbl { width: 48px; font-size: 7px; color: #4A7A4A; letter-spacing: 1px; flex-shrink: 0; }
+  .cd-bar-track { flex: 1; height: 6px; background: #0A1A0A; border: 1px solid #1A3A1A; overflow: hidden; }
+  .cd-bar-fill  { height: 100%; transition: width 0.3s; }
+  .cd-stat-val  { width: 28px; font-size: 8px; color: #88CC88; text-align: right; flex-shrink: 0; }
+
   /* ── DISCLAIMER ────────────────────────────────────── */
   .menu-disclaimer {
     margin-top: 18px; padding-top: 12px; border-top: 1px dashed #1E4A1E;

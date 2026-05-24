@@ -387,8 +387,25 @@ export class Projectile {
     const d=Math.hypot(dx,dy);
     if(d<8){
       const prevHp=this.target.hp;
-      const bonus=this.firedBy?this.firedBy.veteranBonus:1;
-      this.target.takeDmg(this.dmg*bonus);
+      const vetBonus=this.firedBy?this.firedBy.veteranBonus:1;
+      // ── Flanking multiplier ──────────────────────────────────
+      // Armored vehicles take extra damage from side (+25%) or rear (+40%).
+      // Attack direction = vector FROM the target TOWARD where the shot came from.
+      let flankMult=1.0;
+      if(this.target instanceof Unit){
+        const isArmored=(this.target instanceof Tank||this.target instanceof HeavyTank||
+                         (this.target instanceof EnemyUnit&&(this.target as EnemyUnit).isTank));
+        if(isArmored){
+          const atkDir=Math.atan2(this.y-this.target.cy,this.x-this.target.cx);
+          let diff=atkDir-this.target.angle;
+          while(diff>Math.PI)diff-=Math.PI*2;
+          while(diff<-Math.PI)diff+=Math.PI*2;
+          const absD=Math.abs(diff);
+          if(absD>2.7)      flankMult=1.40;  // rear  hit +40%
+          else if(absD>1.85)flankMult=1.25;  // side  hit +25%
+        }
+      }
+      this.target.takeDmg(this.dmg*vetBonus*flankMult);
       // Veteran kill tracking
       if(prevHp>0&&!this.target.isAlive()&&this.firedBy){
         this.firedBy.kills++;
@@ -421,7 +438,7 @@ export class Projectile {
 export class Unit extends Entity {
   x:number;y:number;
   radius:  number=8;
-  speed:   number=85;
+  speed:   number=65;   // base infantry speed (reduced from 85)
   angle:   number=0;
   _flash:  number=0;
   _speedMult: number=1;  // power / suppress modifier
@@ -534,8 +551,16 @@ export class Unit extends Entity {
       if(o===this)continue;
       const dx=this.x-o.x,dy=this.y-o.y;
       const d=Math.hypot(dx,dy);
-      const mn=(this.radius+o.radius)*1.1;
-      if(d<mn&&d>0.01){const push=(mn-d)*0.28;this.x+=(dx/d)*push;this.y+=(dy/d)*push;}
+      if(d<0.01)continue;
+      const hard=(this.radius+o.radius)*1.05;  // no-overlap zone
+      const soft=(this.radius+o.radius)*2.8;   // personal-space zone
+      if(d<hard){
+        const push=(hard-d)*0.35;
+        this.x+=(dx/d)*push; this.y+=(dy/d)*push;
+      } else if(d<soft){
+        const push=(soft-d)*0.045;
+        this.x+=(dx/d)*push; this.y+=(dy/d)*push;
+      }
     }
   }
 
@@ -607,7 +632,7 @@ export class Grenadier extends Unit {
   constructor(x:number,y:number,team:Team='player'){
     super(x,y,team);
     this.hp=this.maxHp=110; this.atkDmg=18; this.atkRange=70; this.atkRate=0.9;
-    this.autoAtkRange=150; this.speed=78;
+    this.autoAtkRange=150; this.speed=60;
     this.projColor=team==='player'?'#FF8800':'#FF6600';
   }
 
@@ -635,7 +660,7 @@ export class Tank extends Unit {
 
   constructor(x:number,y:number,team:Team='player'){
     super(x,y,team);
-    this.radius=12; this.speed=56; this.hp=this.maxHp=320;
+    this.radius=12; this.speed=32; this.hp=this.maxHp=320;
     this.atkDmg=46; this.atkRange=100; this.atkRate=0.65;
     this.projColor=team==='player'?'#FFDD44':'#FF8800';
     this.autoAtkRange=180;
@@ -671,7 +696,7 @@ export class Tank extends Unit {
 export class HeavyTank extends Tank {
   constructor(x:number,y:number,team:Team='player'){
     super(x,y,team);
-    this.radius=15; this.speed=44;
+    this.radius=15; this.speed=26;
     this.hp=this.maxHp=500; this.atkDmg=60; this.atkRate=0.55;
     this.projColor=team==='player'?'#00AAFF':'#FF4400';
   }
@@ -696,7 +721,7 @@ export class Artillery extends Unit {
 
   constructor(x:number,y:number,team:Team='player'){
     super(x,y,team);
-    this.radius=14; this.speed=38; this.hp=this.maxHp=180;
+    this.radius=14; this.speed=30; this.hp=this.maxHp=180;
     this.atkDmg=85; this.atkRange=280; this.atkRate=0.35;
     this.autoAtkRange=300; this.projColor=team==='player'?'#FFEE00':'#FF6600';
   }
@@ -824,7 +849,7 @@ export class AntitankGun extends Unit {
 
   constructor(x:number,y:number,team:Team='player'){
     super(x,y,team);
-    this.radius=10; this.speed=55; this.hp=this.maxHp=140;
+    this.radius=10; this.speed=42; this.hp=this.maxHp=140;
     this.atkDmg=72; this.atkRange=120; this.atkRate=0.7;
     this.autoAtkRange=160;
     this.projColor=team==='player'?'#FF4400':'#FF8800';
@@ -956,14 +981,14 @@ export class EnemyUnit extends Unit {
 
   constructor(x:number,y:number,opts:EnemyOpts={}){
     super(x,y,'enemy');
-    this.speed=opts.speed??52; this.atkDmg=opts.dmg??11; this.atkRate=opts.rate??1.0;
+    this.speed=opts.speed??40; this.atkDmg=opts.dmg??11; this.atkRate=opts.rate??1.0;
     this.atkRange=opts.range??56; this.hp=this.maxHp=opts.hp??100;
     this.radius=opts.radius??8; this.isTank=opts.tank??false; this.isHeavy=opts.heavy??false;
     this.aggroRange=opts.aggro??240; this.projColor=this.isTank?C.enemyLight:C.enemyAccent;
     this.autoAtk=false; this._pauseTimer=rnd(0.5,1.5);
     this._homeX=x; this._homeY=y;
     if(this.isTank){
-      this.radius=12; this.speed=48;
+      this.radius=12; this.speed=32;
       this.hp=this.maxHp=this.isHeavy?500:320;
       this.atkDmg=this.isHeavy?60:46; this.atkRange=100; this.atkRate=this.isHeavy?0.55:0.65;
       this.autoAtkRange=180;

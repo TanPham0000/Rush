@@ -27,6 +27,7 @@ import {
   blackMarketCaptured, blackMarketAbilities,
   statsHistory, gameTimeElapsed, campaignMap,
   paused as pausedStore,
+  survivalMode, survivalTimeLeft, survivalTotal,
 } from '$lib/stores/gameStore';
 import { sound } from './sound';
 import { get } from 'svelte/store';
@@ -115,6 +116,9 @@ export class Engine {
   // Pause
   _paused: boolean=false;
 
+  // Survival mode
+  _survivalWaveTimer: number=60;   // seconds until next beach wave
+
   private _raf:number=0;
   private _lastTime:number=0;
   private _stTimer:ReturnType<typeof setTimeout>|null=null;
@@ -161,31 +165,66 @@ export class Engine {
     this._ref.onKill=(killer,victim)=>{ /* veterancy handled in Projectile */ };
     this._ref.onExplosion=(x,y,r)=>{ this._boom(x,y,'enemy'); };
 
-    // ── Player base ──────────────────────────────────────────
     const pb=md.playerBase;
-    this.buildings.push(new Building(pb.cx,pb.cy,'Construction Yard','player'));
-    this.buildings.push(new Building(pb.cx+140,pb.cy+170,'Power Plant','player'));
-    this.buildings.push(new Building(pb.cx+140,pb.cy-170,'Refinery','player'));
-
-    // ── Enemy base ───────────────────────────────────────────
     const eb=md.enemyBase;
-    this.buildings.push(new Building(eb.cx,eb.cy,'War Factory','enemy'));
-    const wsc=md.waveScale;
-    const turretPositions=[[0,-150],[0,160],[-80,-270],[-80,280]];
-    for(const[dx,dy] of turretPositions){
-      const et=new Turret(eb.cx+dx,eb.cy+dy,'enemy'); et.disabled=false; this.buildings.push(et);
-    }
-    // Map 2 (city) gets extra turret coverage
-    if(md.theme===2){
-      const et2=new Turret(eb.cx-200,eb.cy,'enemy'); et2.disabled=false; this.buildings.push(et2);
+    const isSurvival = md.mode==='survival';
+
+    if (isSurvival && md.preBuilt) {
+      // ── BEACH DEFENCE — pre-built starting layout ─────────
+      // HQ + Economy
+      this.buildings.push(new Building(pb.cx,      pb.cy,       'Construction Yard','player'));
+      this.buildings.push(new Building(pb.cx+150,  pb.cy-200,   'Power Plant',      'player'));
+      this.buildings.push(new Building(pb.cx+150,  pb.cy+200,   'Power Plant',      'player'));
+      this.buildings.push(new Building(pb.cx+150,  pb.cy-60,    'Refinery',         'player'));
+      this.buildings.push(new Building(pb.cx+150,  pb.cy+60,    'Refinery',         'player'));
+      this.buildings.push(new Building(pb.cx+300,  pb.cy,       'Barracks',         'player'));
+      this.buildings.push(new Building(pb.cx+300,  pb.cy+160,   'War Factory',      'player'));
+      // Defense turrets along the seawall and defense line
+      const turretSpots=[
+        [950, 200],[960, 420],[960, 600],[960, 780],[950,1000], // main line (sandbag positions)
+        [1150,350],[1145,600],[1150,850],                        // forward screen
+      ];
+      for(const[tx,ty] of turretSpots){
+        const t=new Turret(tx,ty,'player'); this.buildings.push(t);
+      }
+      // Starting infantry in forest cover
+      const infSpots=[[450,280],[470,520],[460,680],[470,920],[620,400],[610,800]];
+      for(const[ix,iy] of infSpots){
+        const u=new Unit(ix,iy,'player'); u._game=this._ref; this.pUnits.push(u);
+      }
+    } else {
+      // ── STANDARD maps — minimal starting base ─────────────
+      this.buildings.push(new Building(pb.cx,pb.cy,'Construction Yard','player'));
+      this.buildings.push(new Building(pb.cx+140,pb.cy+170,'Power Plant','player'));
+      this.buildings.push(new Building(pb.cx+140,pb.cy-170,'Refinery','player'));
+
+      // Enemy base
+      this.buildings.push(new Building(eb.cx,eb.cy,'War Factory','enemy'));
+      const turretPositions=[[0,-150],[0,160],[-80,-270],[-80,280]];
+      for(const[dx,dy] of turretPositions){
+        const et=new Turret(eb.cx+dx,eb.cy+dy,'enemy'); et.disabled=false; this.buildings.push(et);
+      }
+      if(md.theme===2){
+        const et2=new Turret(eb.cx-200,eb.cy,'enemy'); et2.disabled=false; this.buildings.push(et2);
+      }
     }
 
     // ── Tiberium fields ──────────────────────────────────────
     for(const{cx,cy} of md.tibFields) this.tibFields.push(new TiberiumField(cx,cy));
 
-    // ── Starting harvester ───────────────────────────────────
-    const startHarv=new Harvester(pb.cx+220,pb.cy,this._ref);
-    this.pUnits.push(startHarv); this._ref.pUnits=this.pUnits;
+    // ── Starting harvester (for non-preBuilt maps) ───────────
+    if (!isSurvival || !md.preBuilt) {
+      const startHarv=new Harvester(pb.cx+220,pb.cy,this._ref);
+      this.pUnits.push(startHarv);
+    } else {
+      // Beach Defence gets a harvester too
+      const h=new Harvester(pb.cx+250,pb.cy-80,this._ref);
+      this.pUnits.push(h);
+    }
+    this._ref.pUnits=this.pUnits;
+
+    // ── Survival wave timer ───────────────────────────────────
+    this._survivalWaveTimer = isSurvival ? 30 : 0;  // first beach wave at 30s
 
     // ── Capture nodes ─────────────────────────────────────────
     this.captureNodes=md.captureNodes.map(n=>
@@ -482,8 +521,7 @@ export class Engine {
       sound.attackOrder();
       this.setStatus('Attack order!','warn');
     } else {
-      const cols=Math.ceil(Math.sqrt(movers.length)),spacing=24;
-      movers.forEach((u,i)=>{const col=(i%cols)-Math.floor(cols/2),row=Math.floor(i/cols);u.moveTo(pos.x+col*spacing,pos.y+row*spacing);});
+      this._lineFormation(movers, pos);
       sound.moveOrder();
       this._moveInd={x:pos.x,y:pos.y,t:0.7};
     }
@@ -513,30 +551,91 @@ export class Engine {
   }
   commandAttackMove(pos:{x:number;y:number}){
     const movers=this._selected.filter(e=>e instanceof Unit&&e.team==='player') as Unit[];
-    const cols=Math.ceil(Math.sqrt(movers.length)),spacing=24;
-    movers.forEach((u,i)=>{const col=(i%cols)-Math.floor(cols/2),row=Math.floor(i/cols);u.moveTo(pos.x+col*spacing,pos.y+row*spacing);u.autoAtk=true;});
+    this._lineFormation(movers, pos);
+    movers.forEach(u=>u.autoAtk=true);
     this._commandMode=null; this._moveInd={x:pos.x,y:pos.y,t:0.7};
     sound.attackOrder();
     this.setStatus('Attack move!','warn');
   }
 
+  // Arrange units in a line perpendicular to the direction of movement.
+  // Row 0 is the leading line; additional rows stagger behind for large groups.
+  _lineFormation(movers: Unit[], dest: {x:number;y:number}){
+    if(!movers.length) return;
+    const cx=movers.reduce((s,u)=>s+u.x,0)/movers.length;
+    const cy=movers.reduce((s,u)=>s+u.y,0)/movers.length;
+    const dx=dest.x-cx, dy=dest.y-cy;
+    const dist=Math.hypot(dx,dy);
+    // If click is almost on top of the group, use a horizontal line as fallback
+    const nx= dist>5 ? dx/dist : 1;
+    const ny= dist>5 ? dy/dist : 0;
+    // Perpendicular axis (left of forward)
+    const px=-ny, py=nx;
+    const ROW_SZ=6, SPACING=34;
+    movers.forEach((u,i)=>{
+      const row=Math.floor(i/ROW_SZ);
+      const posInRow=i%ROW_SZ;
+      const rowSize=Math.min(ROW_SZ, movers.length-row*ROW_SZ);
+      const off=posInRow-(rowSize-1)/2;   // centered within row
+      u.moveTo(
+        clamp(dest.x + px*off*SPACING - nx*row*SPACING, 16, MAP_W-16),
+        clamp(dest.y + py*off*SPACING - ny*row*SPACING, 16, MAP_H-16)
+      );
+    });
+  }
+
   // ── WAVE SPAWNING ─────────────────────────────────────────
   _spawnWave(cfg:{infantry:number;tanks:number}){
-    const wf=this.buildings.find(b=>b.type==='War Factory'&&b.team==='enemy');
-    if(!wf)return;
     const sc=this._mapDef.waveScale, hsc=this._mapDef.enemyHpScale;
     const theme=this._mapDef.theme;
-    const ox=wf.cx,oy=wf.cy;
-    for(let i=0;i<Math.round(cfg.infantry*sc);i++){
-      const e=new EnemyUnit(ox+rnd(-65,65),oy+rnd(-65,65));
-      if(hsc!==1)e.hp=e.maxHp=Math.round(e.hp*hsc);
-      e._game=this._ref; e.mapTheme=theme; this.eUnits.push(e);
+    const isSurvival = this._mapDef.mode === 'survival';
+
+    const mkEnemy=(x:number,y:number,opts:{tank?:boolean;heavy?:boolean}={})=>{
+      const e=new EnemyUnit(x,y,opts);
+      if(hsc!==1) e.hp=e.maxHp=Math.round(e.hp*hsc);
+      e._game=this._ref; e.mapTheme=theme;
+      this.eUnits.push(e);
+    };
+
+    if (isSurvival) {
+      // ── BEACH DEFENCE — amphibious assault from the ocean ──
+      // Enemies wade in from the right edge in horizontal landing waves.
+      // Spread vertically across the beach; tanks land at centre.
+      const totalInf = Math.round(cfg.infantry * sc);
+      const totalTnk = Math.round(cfg.tanks * sc);
+
+      // Infantry: random spread up the beach
+      for (let i = 0; i < totalInf; i++) {
+        mkEnemy(MAP_W - rnd(20, 80), rnd(60, MAP_H - 60));
+      }
+      // Tanks: land near road centreline
+      for (let i = 0; i < totalTnk; i++) {
+        const heavy = this._gameTime > 300 && Math.random() < 0.30;
+        mkEnemy(MAP_W - rnd(20, 70), rnd(MAP_H*0.3, MAP_H*0.7), {tank:true, heavy});
+      }
+      sound.waveAlert();
+      return;
+    }
+
+    // ── STANDARD maps — use enemy War Factory ─────────────
+    const wf=this.buildings.find(b=>b.type==='War Factory'&&b.team==='enemy');
+    if(!wf)return;
+
+    const totalInf=Math.round(cfg.infantry*sc);
+
+    if(this._waveIndex===0 || totalInf<=2){
+      for(let i=0;i<totalInf;i++) mkEnemy(wf.cx+rnd(-65,65),wf.cy+rnd(-65,65));
+    } else {
+      const nMain  = Math.round(totalInf*0.55);
+      const nNorth = Math.round(totalInf*0.22);
+      const nSouth = totalInf - nMain - nNorth;
+      for(let i=0;i<nMain; i++) mkEnemy(wf.cx+rnd(-80,80),  wf.cy+rnd(-60,60));
+      for(let i=0;i<nNorth;i++) mkEnemy(MAP_W-rnd(40,140),  rnd(60,240));
+      for(let i=0;i<nSouth;i++) mkEnemy(MAP_W-rnd(40,140),  MAP_H-rnd(60,240));
     }
     for(let i=0;i<Math.round(cfg.tanks*sc);i++){
       const heavy=this._gameTime>250&&Math.random()<0.30;
-      const e=new EnemyUnit(ox+rnd(-65,65),oy+rnd(-65,65),{tank:true,heavy});
-      if(hsc!==1)e.hp=e.maxHp=Math.round(e.hp*hsc);
-      e._game=this._ref; e.mapTheme=theme; this.eUnits.push(e);
+      mkEnemy(wf.cx+rnd(-65,65),wf.cy+rnd(-65,65),{tank:true,heavy});
     }
     sound.waveAlert();
   }
@@ -672,38 +771,63 @@ export class Engine {
       this._statsSnaps.push({t:Math.floor(this._gameTime),kills:this._enemiesKilled,produced:this._unitsProduced,credits:Math.floor(this._credits)});
     }
 
-    // Wave timer
-    this._spawnTimer-=dt;
-    if(this._spawnTimer<=0){
-      if(this._waveIndex<WAVES.length){
-        const w=WAVES[this._waveIndex];
-        this._spawnWave(w); this._waveLabel=this._waveIndex+1; this._waveIndex++;
-        const nextW=WAVES[this._waveIndex];
-        this._spawnTimer=nextW?nextW.at-w.at:ENDLESS_INTERVAL;
-        waveIncoming.set(true);
-        this.setStatus(`WAVE ${this._waveLabel} INCOMING!`,'error');
-        setTimeout(()=>waveIncoming.set(false),3000);
-      } else {
-        const extra=Math.floor((this._gameTime-WAVES[WAVES.length-1].at)/65);
-        this._spawnWave({infantry:Math.min(10,4+extra),tanks:Math.min(8,2+extra)});
-        this._spawnTimer=Math.max(22,ENDLESS_INTERVAL-extra*3);
+    // ── Wave timer ────────────────────────────────────────────
+    const isSurvival = this._mapDef.mode === 'survival';
+
+    if (isSurvival) {
+      // Survival mode: escalating waves from the ocean every ~60s
+      this._survivalWaveTimer -= dt;
+      if (this._survivalWaveTimer <= 0) {
+        const waveNum = Math.floor(this._gameTime / 60);
+        const infantry = Math.min(14, 3 + Math.floor(waveNum * 0.9));
+        const tanks    = Math.max(0, Math.floor((waveNum - 3) * 0.65));
+        this._spawnWave({ infantry, tanks });
         this._waveLabel++;
+        // Interval shrinks as game progresses (from 60s → 35s min)
+        this._survivalWaveTimer = Math.max(35, 65 - waveNum * 2);
         waveIncoming.set(true);
-        this.setStatus(`ENDLESS ASSAULT ${this._waveLabel-WAVES.length}`,'error');
-        setTimeout(()=>waveIncoming.set(false),3000);
+        this.setStatus(`WAVE ${this._waveLabel} — ASSAULT INCOMING!`, 'error');
+        setTimeout(() => waveIncoming.set(false), 3000);
+      }
+    } else {
+      this._spawnTimer -= dt;
+      if(this._spawnTimer<=0){
+        if(this._waveIndex<WAVES.length){
+          const w=WAVES[this._waveIndex];
+          this._spawnWave(w); this._waveLabel=this._waveIndex+1; this._waveIndex++;
+          const nextW=WAVES[this._waveIndex];
+          this._spawnTimer=nextW?nextW.at-w.at:ENDLESS_INTERVAL;
+          waveIncoming.set(true);
+          this.setStatus(`WAVE ${this._waveLabel} INCOMING!`,'error');
+          setTimeout(()=>waveIncoming.set(false),3000);
+        } else {
+          const extra=Math.floor((this._gameTime-WAVES[WAVES.length-1].at)/65);
+          this._spawnWave({infantry:Math.min(10,4+extra),tanks:Math.min(8,2+extra)});
+          this._spawnTimer=Math.max(22,ENDLESS_INTERVAL-extra*3);
+          this._waveLabel++;
+          waveIncoming.set(true);
+          this.setStatus(`ENDLESS ASSAULT ${this._waveLabel-WAVES.length}`,'error');
+          setTimeout(()=>waveIncoming.set(false),3000);
+        }
       }
     }
 
-    // WIN / LOSE
-    const wf=this.buildings.find(b=>b.type==='War Factory'&&b.team==='enemy');
-    if(!wf){this._onWin();return;}
-    warFactoryHp.set(wf.hp);
-
-    const centerNode=this.captureNodes.find(n=>n.isCenter);
-    if(centerNode&&centerNode.holdTimer>=HOLD_WIN_TIME){this._onWin();return;}
-
-    const pAlive=this.pUnits.length>0||this.buildings.some(b=>b.team==='player');
-    if(!pAlive){this._onLose();return;}
+    // ── WIN / LOSE ────────────────────────────────────────────
+    if (isSurvival) {
+      const dur = this._mapDef.survivalDuration ?? 900;
+      if (this._gameTime >= dur) { this._onWin(); return; }
+      // Lose: Construction Yard destroyed
+      const hq = this.buildings.find(b=>b.type==='Construction Yard'&&b.team==='player');
+      if (!hq) { this._onLose(); return; }
+    } else {
+      const wf=this.buildings.find(b=>b.type==='War Factory'&&b.team==='enemy');
+      if(!wf){this._onWin();return;}
+      warFactoryHp.set(wf.hp);
+      const centerNode=this.captureNodes.find(n=>n.isCenter);
+      if(centerNode&&centerNode.holdTimer>=HOLD_WIN_TIME){this._onWin();return;}
+      const pAlive=this.pUnits.length>0||this.buildings.some(b=>b.team==='player');
+      if(!pAlive){this._onLose();return;}
+    }
 
     this._syncStores();
   }
@@ -972,6 +1096,15 @@ export class Engine {
     upgradesStore.set([...this._upgrades]);
     blackMarketCaptured.set(this._blackMarketCaptured);
     blackMarketAbilities.set([...this._blackMarketAbilities]);
+    // Survival mode
+    const isSurv = this._mapDef.mode === 'survival';
+    survivalMode.set(isSurv);
+    if (isSurv) {
+      const dur = this._mapDef.survivalDuration ?? 900;
+      survivalTotal.set(dur);
+      survivalTimeLeft.set(Math.max(0, Math.ceil(dur - this._gameTime)));
+    }
+    pausedStore.set(this._paused);
   }
 
   // ── START / STOP ──────────────────────────────────────────
