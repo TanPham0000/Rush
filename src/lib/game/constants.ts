@@ -44,27 +44,30 @@ export const BDEF = {
   'Power Plant':       { w: 60, h: 52, hp:  500, power: 20, cost: 200, buildRadius: 360, buildTime: 22 },
   'Barracks':          { w: 64, h: 56, hp:  600, power: -5, cost: 300, buildRadius:   0, buildTime: 28 },
   'Refinery':          { w: 72, h: 62, hp:  700, power:-10, cost: 500, buildRadius:   0, buildTime: 32 },
-  'Turret':            { w: 36, h: 36, hp:  400, power: -5, cost: 350, buildRadius:   0, buildTime: 16 },
+  'Turret':            { w: 36, h: 36, hp:  400, power: -5, cost: 350, buildRadius:   0, buildTime:  7 },
   'War Factory':       { w: 88, h: 72, hp: 2200, power:  0, cost: 700, buildRadius:   0, buildTime: 40 },
   'Tech Lab':          { w: 72, h: 60, hp:  800, power: -8, cost: 600, buildRadius:   0, buildTime: 36 },
+  'Armoury':           { w: 68, h: 58, hp:  650, power: -6, cost: 450, buildRadius:   0, buildTime: 30 },
 } as const;
 
 // ── TRAINING TIMES (seconds) ─────────────────────────────────
 export const TRAIN_TIME: Record<string, number> = {
-  'Infantry':   8,
-  'Grenadier': 11,
-  'Tank':      20,
-  'HeavyTank': 26,
-  'Artillery': 28,
-  'Scout':      5,
-  'AntitankGun': 18,
-  'Harvester': 13,
+  'Infantry':    8,
+  'Grenadier':  11,
+  'Marksman':   14,
+  'Tank':       20,
+  'HeavyTank':  26,
+  'Artillery':  28,
+  'Scout':       5,
+  'AntitankGun':18,
+  'Harvester':  13,
 };
 
 // ── UNIT COSTS ────────────────────────────────────────────────
 export const UNIT_COST: Record<string, number> = {
   'Infantry':    100,
   'Grenadier':   100,
+  'Marksman':    175,
   'Tank':        400,
   'HeavyTank':   400,
   'Artillery':   550,
@@ -80,6 +83,14 @@ export const UPGRADES: UpgradeDef[] = [
   { key:'HeavyTank',   label:'Heavy Tank',      desc:'Tanks → +60% HP, +30% dmg',  cost: 500 },
   { key:'AntitankGun', label:'Anti-Tank Gun',   desc:'New unit: armor-piercing gun', cost: 350 },
   { key:'ArtilleryUnit',label:'Artillery',      desc:'New unit: long-range cannon',  cost: 600 },
+];
+
+// ── ARMOURY UPGRADES (researched at Armoury) ─────────────────
+export const ARMOURY_UPGRADES: UpgradeDef[] = [
+  { key:'ArmUnitHp',  label:'Reinforced Armour', desc:'+20% HP to all infantry',              cost: 350 },
+  { key:'ArmUnitDmg', label:'Incendiary Rounds',  desc:'+20% damage to all infantry',          cost: 350 },
+  { key:'ArmUnitSpd', label:'Quick March',         desc:'+15% speed to all infantry',           cost: 280 },
+  { key:'ArmTrench',  label:'Entrench',            desc:'Infantry dig trenches after 8s idle (+40% armour)', cost: 400 },
 ];
 
 // ── WAVE CONFIGS ─────────────────────────────────────────────
@@ -106,6 +117,7 @@ export interface CaptureNodeDef {
   cx: number; cy: number; label: string; income: number;
   isCenter: boolean; isBlackMarket?: boolean;
   isRadar?: boolean; isBeachGun?: boolean;
+  isPark?: boolean; isEngineer?: boolean;
 }
 
 export interface ImpassableZone { x: number; y: number; w: number; h: number }
@@ -142,7 +154,7 @@ export const MAPS: MapDef[] = [
     id: 0,
     name: 'RIVER CROSSING',
     subtitle: 'CHOKEPOINTS & BRIDGES',
-    description: 'Control the bridges. The river splits the battlefield — whoever holds the crossings controls the war.',
+    description: 'Control the bridges. The river splits the battlefield — whoever holds the crossings controls the war. Hold the Control Center long enough and the enemy collapses.',
     theme: 0,
     startCredits: 1000,
     waveScale:    1.0,
@@ -160,8 +172,8 @@ export const MAPS: MapDef[] = [
       [1150,400],[1230,840],[310,600],[1600,600],[560,200],
     ].map(([cx,cy]) => ({ cx, cy })),
     objectives: [
-      'Destroy the enemy War Factory',
-      'OR hold Control Center for 120 seconds',
+      'PRIMARY — Hold CONTROL CENTER for 120 seconds',
+      'SECONDARY — Destroy the enemy War Factory',
       'Protect your Construction Yard',
     ],
   },
@@ -171,7 +183,7 @@ export const MAPS: MapDef[] = [
     id: 1,
     name: 'HIGHLAND ASSAULT',
     subtitle: 'HIGH GROUND IS EVERYTHING',
-    description: 'Shattered ridges and dense forest. Secure the hilltops — they grant range bonuses that change every engagement. Bases are far apart — speed and economy are everything.',
+    description: 'Shattered ridges and dense forest. The enemy digs in on the high ground — destroy their base from below or push long-range weapons to overlook their compound. Marksmen and Artillery excel here.',
     theme: 1,
     startCredits: 800,
     waveScale:    1.15,
@@ -181,7 +193,8 @@ export const MAPS: MapDef[] = [
     enemyBase:    { cx: 1680, cy: 150 },
     captureNodes: [
       { cx: 380,  cy: 300,  label: 'WEST RIDGE',    income: 5, isCenter: false },
-      { cx: 900,  cy: 580,  label: 'SUMMIT',         income: 6, isCenter: true  },
+      // Summit moved deep into enemy territory — within their turret coverage
+      { cx: 1480, cy: 300,  label: 'SUMMIT',         income: 6, isCenter: true  },
       { cx: 1460, cy: 860,  label: 'EAST RIDGE',    income: 5, isCenter: false },
       { cx: 1150, cy: 200,  label: 'BLACK MARKET',  income: 0, isCenter: false, isBlackMarket: true },
     ],
@@ -191,9 +204,9 @@ export const MAPS: MapDef[] = [
       [700,300],[1260,400],[400,600],
     ].map(([cx,cy]) => ({ cx, cy })),
     objectives: [
-      'Destroy the enemy Construction Yard',
-      'OR hold Summit for 120 seconds',
-      'Build your economy — Refineries win wars',
+      'PRIMARY — Destroy the enemy Construction Yard',
+      'SECONDARY — Capture SUMMIT (deep in enemy lines)',
+      'Use Artillery & Marksmen to suppress from high ground',
     ],
   },
 
@@ -202,7 +215,7 @@ export const MAPS: MapDef[] = [
     id: 2,
     name: 'URBAN SIEGE',
     subtitle: 'BLOCK BY BLOCK',
-    description: 'A ruined city. Every street corner is a killzone. Infantry use buildings for cover; tanks are exposed in the open.',
+    description: 'A ruined city. Every street corner is a killzone. Infantry use buildings for cover; tanks are exposed in the open. An Engineer Depot near your base lets you call in rapid repairs.',
     theme: 2,
     startCredits: 600,
     waveScale:    1.30,
@@ -211,10 +224,12 @@ export const MAPS: MapDef[] = [
     playerBase:   { cx: 160, cy: 600 },
     enemyBase:    { cx: 1700, cy: 600 },
     captureNodes: [
-      { cx: 500,  cy: 250,  label: 'NORTH PLAZA',   income: 5, isCenter: false },
-      { cx: 900,  cy: 600,  label: 'CITY CENTER',   income: 7, isCenter: true  },
-      { cx: 1350, cy: 950,  label: 'SOUTH PLAZA',   income: 5, isCenter: false },
-      { cx: 920,  cy: 280,  label: 'BLACK MARKET',  income: 0, isCenter: false, isBlackMarket: true },
+      { cx: 500,  cy: 250,  label: 'NORTH PLAZA',    income: 5, isCenter: false },
+      { cx: 900,  cy: 600,  label: 'CITY CENTER',    income: 7, isCenter: true  },
+      { cx: 1350, cy: 950,  label: 'SOUTH PLAZA',    income: 5, isCenter: false },
+      { cx: 920,  cy: 280,  label: 'BLACK MARKET',   income: 0, isCenter: false, isBlackMarket: true },
+      // Engineer Depot — near player base, passive income
+      { cx: 320,  cy: 900,  label: 'ENGINEER DEPOT', income: 4, isCenter: false, isEngineer: true },
     ],
     tibFields: [
       [260,180],[300,1020],[680,420],[700,800],
@@ -222,9 +237,9 @@ export const MAPS: MapDef[] = [
       [400,500],[1300,350],[1600,400],
     ].map(([cx,cy]) => ({ cx, cy })),
     objectives: [
-      'Destroy the enemy Construction Yard',
+      'PRIMARY — Destroy the enemy Construction Yard',
       'OR hold City Center for 120 seconds',
-      'Street fighting — infantry dominate in buildings',
+      'Capture ENGINEER DEPOT near your base for bonus income',
     ],
   },
 
@@ -233,7 +248,7 @@ export const MAPS: MapDef[] = [
     id: 3,
     name: 'OPERATION WHALE',
     subtitle: 'HOLD THE SHORELINE',
-    description: 'Amphibious assault from the deep blue. Wave after wave crashes against your beachhead fortifications. Hold the shoreline for 15 minutes — or be swept into the sea.',
+    description: 'Amphibious assault from the deep blue. Wave after wave crashes against your beachhead. Capture income nodes to fund your defence and hold the shoreline for 15 minutes — or be swept into the sea.',
     theme: 3,
     startCredits: 2500,
     waveScale:    1.0,
@@ -241,19 +256,31 @@ export const MAPS: MapDef[] = [
     playerBase:   { cx: 200, cy: 600 },
     enemyBase:    { cx: 1760, cy: 600 },
     captureNodes: [
-      { cx: 720,  cy: 220, label: 'RADAR TOWER', income: 0, isCenter: false, isRadar:    true },
-      { cx: 1260, cy: 960, label: 'BEACH GUN',   income: 0, isCenter: false, isBeachGun: true },
+      // Radar + beach gun (existing)
+      { cx: 720,  cy: 220,  label: 'RADAR TOWER',    income: 0, isCenter: false, isRadar:    true },
+      { cx: 1260, cy: 960,  label: 'BEACH GUN',      income: 0, isCenter: false, isBeachGun: true },
+      // Passive income nodes — forward positions to fund defence
+      { cx: 560,  cy: 120,  label: 'NORTH SUPPLY',   income: 5, isCenter: false },
+      { cx: 680,  cy: 600,  label: 'COMMAND POST',   income: 6, isCenter: false },
+      { cx: 560,  cy: 1080, label: 'SOUTH SUPPLY',   income: 5, isCenter: false },
+      // Engineer depot near player base
+      { cx: 300,  cy: 350,  label: 'ENGINEER DEPOT', income: 3, isCenter: false, isEngineer: true },
     ],
     tibFields: [
+      // Original six
       [300, 280], [300, 920], [560, 200], [560, 1000], [820, 420], [820, 780],
+      // Extra eco fields — forward of the beach
+      [680, 340], [680, 860], [440, 540], [440, 680],
+      // Rear area income
+      [160, 200], [160, 400], [160, 800], [160, 1000],
     ].map(([cx,cy]) => ({ cx, cy })),
     mode:             'survival',
     survivalDuration: 900,
     preBuilt:         true,
     objectives: [
       'Survive 15 minutes of amphibious assault',
+      'Capture income nodes to fund your defence',
       'Defend your Construction Yard at all costs',
-      'Capture Radar Tower for full map vision',
     ],
   },
 
@@ -311,15 +338,15 @@ export const MAPS: MapDef[] = [
 
   // ── MAP 5: OPERATION SIEGE ───────────────────────────────
   // Final push into the heart of the city. Enemy is dug in at top-right.
-  // Townhall in the city centre is the hold-to-win objective.
-  // City Park to the north offers income + cover.
-  // Observation Post far east overlooks enemy territory — radar vision.
+  // Only win condition: destroy enemy Construction Yard.
+  // City Park (isPark) to the north — green cover + income.
+  // Observation Post at bottom-right corner — radar.
   // 10 hardened turrets guard the enemy HQ. Enemy eco active.
   {
     id: 5,
     name: 'OPERATION SIEGE',
     subtitle: 'HEART OF THE CITY',
-    description: "Final push. The enemy commands from the northeast district behind 10 reinforced turrets. Capture the Town Hall at the city centre to trigger a ceasefire — or storm their compound directly. An Observation Post in the east gives radar coverage over their lines.",
+    description: "Final push. The enemy commands from the northeast district behind 10 reinforced turrets. Storm their compound and destroy their Construction Yard — there is no other way out. Capture City Park for cover and the Observation Post for full radar.",
     theme: 2,
     startCredits: 2000,
     waveScale:    1.0,
@@ -328,12 +355,12 @@ export const MAPS: MapDef[] = [
     playerBase:   { cx: 120, cy: 1080 },
     enemyBase:    { cx: 1700, cy: 120 },
     captureNodes: [
-      // City Park — north, income bonus
-      { cx:  480, cy: 200, label: 'CITY PARK',        income: 6, isCenter: false },
-      // Town Hall — centre, hold to win
-      { cx:  900, cy: 600, label: 'TOWN HALL',         income: 0, isCenter: true  },
-      // Observation Post — far east, radar/intel
-      { cx: 1580, cy: 680, label: 'OBSERVATION POST', income: 0, isCenter: false, isRadar: true },
+      // City Park — north, income + green cover
+      { cx:  480, cy: 200, label: 'CITY PARK',        income: 6, isCenter: false, isPark: true },
+      // Town Hall — income only (NOT isCenter — no hold-to-win)
+      { cx:  900, cy: 600, label: 'TOWN HALL',         income: 5, isCenter: false },
+      // Observation Post — complete bottom-right, radar/intel
+      { cx: 1700, cy: 1050, label: 'OBSERVATION POST', income: 0, isCenter: false, isRadar: true },
       // Black Market — mid-south
       { cx:  640, cy: 900, label: 'BLACK MARKET',     income: 0, isCenter: false, isBlackMarket: true },
     ],
@@ -373,9 +400,9 @@ export const MAPS: MapDef[] = [
       { type: 'Turret', cx: 1430, cy: 100 },
     ],
     objectives: [
-      'Capture TOWN HALL and hold for 120 seconds',
-      'OR destroy the enemy Construction Yard',
-      'Capture OBSERVATION POST for radar coverage',
+      'DESTROY the enemy Construction Yard — only way to win',
+      'Capture CITY PARK for cover and income',
+      'Capture OBSERVATION POST for full radar coverage',
     ],
   },
 ];

@@ -42,6 +42,8 @@ export const hasWarFactory    = writable(false);
 export const selHasTechLab    = writable(false);
 export const selHasTurret     = writable(false);
 export const selTurretVariant = writable<string>('standard'); // 'standard'|'anti-infantry'|'anti-tank'
+export const hasArmoury       = writable(false);
+export const selHasArmoury    = writable(false);
 
 // ── Pause ─────────────────────────────────────────────────────
 export const paused = writable(false);
@@ -71,6 +73,8 @@ export interface NodeState {
   isBlackMarket: boolean;
   isRadar: boolean;
   isBeachGun: boolean;
+  isPark: boolean;
+  isEngineer: boolean;
   holdTimer: number;
 }
 export const captureNodesState = writable<NodeState[]>([]);

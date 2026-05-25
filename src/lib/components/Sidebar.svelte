@@ -10,13 +10,14 @@
     enemiesKilled, unitsLost,
     selBuildingQueue, captureNodesState, holdProgress,
     upgrades, blackMarketCaptured, blackMarketAbilities,
+    hasArmoury, selHasArmoury,
   } from '$lib/stores/gameStore';
-  import { HOLD_WIN_TIME, UPGRADES } from '$lib/game/constants';
+  import { HOLD_WIN_TIME, UPGRADES, ARMOURY_UPGRADES } from '$lib/game/constants';
   import { survivalTimeLeft } from '$lib/stores/gameStore';
   import type { Engine } from '$lib/game/engine';
   import {
     Building, Turret, Harvester, Unit, Tank, HeavyTank,
-    Grenadier, Artillery, Scout, AntitankGun, EnemyUnit,
+    Grenadier, Marksman, Artillery, Scout, AntitankGun, EnemyUnit,
   } from '$lib/game/entities';
 
   interface Props { engine: Engine | null; muted: boolean; onToggleMute: () => void; }
@@ -27,6 +28,7 @@
     if (e instanceof Building)    return e.type;
     if (e instanceof Harvester)   return 'Harvester';
     if (e instanceof Grenadier)   return 'Grenadier';
+    if (e instanceof Marksman)    return 'Marksman';
     if (e instanceof HeavyTank)   return 'Heavy Tank';
     if (e instanceof Artillery)   return 'Artillery';
     if (e instanceof Scout)       return 'Scout';
@@ -123,8 +125,10 @@
       class:bmarket={n.isBlackMarket}
       class:radar={n.isRadar}
       class:beachgun={n.isBeachGun}
+      class:park={n.isPark}
+      class:engineer={n.isEngineer}
       title={n.label}>
-      <span class="node-label">{n.isBlackMarket ? '◈' : n.isRadar ? '📡' : n.isBeachGun ? '🔫' : n.label.split(' ')[0]}</span>
+      <span class="node-label">{n.isBlackMarket ? '◈' : n.isRadar ? '📡' : n.isBeachGun ? '🔫' : n.isPark ? '🌳' : n.isEngineer ? '🔧' : n.label.split(' ')[0]}</span>
     </div>
     {/each}
   </div>
@@ -155,7 +159,7 @@
 
   <!-- Build -->
   <div class="section">
-    <div class="section-label">CONSTRUCT · P B F T K</div>
+    <div class="section-label">CONSTRUCT · P B F T K O</div>
     <div class="btn-grid">
       <button class="btn" class:active={$buildMode==='Power Plant'}
         disabled={$credits<200||$gameState!=='playing'}
@@ -182,7 +186,13 @@
       disabled={$credits<600||$gameState!=='playing'}
       onclick={() => engine?.enterBuild('Tech Lab')}
       style="margin-top:3px">
-      <span class="bn">Tech Lab</span><span class="bc">600¢ [K]</span>
+      <span class="bn">Tech Lab</span><span class="bc">600¢ [K] · tanks + units</span>
+    </button>
+    <button class="btn full arm-build-btn" class:active={$buildMode==='Armoury'}
+      disabled={$credits<450||$gameState!=='playing'}
+      onclick={() => engine?.enterBuild('Armoury')}
+      style="margin-top:3px">
+      <span class="bn">Armoury</span><span class="bc">450¢ [O] · inf upgrades</span>
     </button>
     <button class="btn full wf-btn" class:active={$buildMode==='War Factory'}
       disabled={$credits<700||$gameState!=='playing'||!$hasTechLab}
@@ -200,7 +210,12 @@
     <button class="btn full" disabled={$credits<100||$gameState!=='playing'}
       onclick={() => engine?.trainInfantry()}>
       <span class="bn">{$upgrades.includes('Grenadier') ? 'Grenadier★' : 'Infantry'}</span>
-      <span class="bc">100¢ · {$upgrades.includes('Grenadier') ? '11s' : '8s'}</span>
+      <span class="bc">100¢ · {$upgrades.includes('Grenadier') ? '11s · splash' : '8s'}</span>
+    </button>
+    <button class="btn full mrk-btn" disabled={$credits<175||$gameState!=='playing'}
+      onclick={() => engine?.trainMarksman()}
+      style="margin-top:3px">
+      <span class="bn">Marksman</span><span class="bc">175¢ · 14s · long range sniper</span>
     </button>
     <button class="btn full scout-btn" disabled={$credits<80||$gameState!=='playing'}
       onclick={() => engine?.trainScout()}
@@ -253,6 +268,23 @@
   </div>
   {/if}
 
+  <!-- Armoury: Infantry upgrade panel -->
+  {#if $selHasArmoury}
+  <div class="section armoury-section">
+    <div class="section-label">🛡 ARMOURY — INFANTRY</div>
+    {#each ARMOURY_UPGRADES as upg}
+    {@const done = $upgrades.includes(upg.key)}
+    <button class="btn full arm-upg-btn" class:done
+      disabled={$credits < upg.cost || $gameState !== 'playing' || done}
+      onclick={() => engine?.researchArmouryUpgrade(upg.key)}
+      style="margin-bottom:2px">
+      <span class="bn">{upg.label}{done ? ' ✓' : ''}</span>
+      <span class="bc">{done ? 'RESEARCHED' : `${upg.cost}¢ — ${upg.desc}`}</span>
+    </button>
+    {/each}
+  </div>
+  {/if}
+
   <!-- Turret upgrade panel -->
   {#if $selHasTurret && $hasTechLab}
   <div class="section turret-upg-section">
@@ -265,13 +297,21 @@
       <span class="bc">250¢ · dual cannons · ×0.28 vs armour</span>
     </button>
     <button class="btn full at-turret-btn" disabled={$credits<350||$gameState!=='playing'}
-      onclick={() => engine?.upgradeTurret('anti-tank')}>
+      onclick={() => engine?.upgradeTurret('anti-tank')}
+      style="margin-bottom:3px">
       <span class="bn">💥 Anti-Tank</span>
       <span class="bc">350¢ · heavy cannon · ×1.65 vs armour</span>
     </button>
+    <button class="btn full art-turret-btn" disabled={$credits<600||$gameState!=='playing'}
+      onclick={() => engine?.upgradeTurret('artillery')}>
+      <span class="bn">🔥 Artillery</span>
+      <span class="bc">600¢ · massive splash · crushes buildings</span>
+    </button>
     {:else}
     <div class="req-note">
-      {$selTurretVariant === 'anti-infantry' ? '⚡ ANTI-INFANTRY — dual autocannons active' : '💥 ANTI-TANK — heavy cannon active'}
+      {$selTurretVariant === 'anti-infantry' ? '⚡ ANTI-INFANTRY — dual autocannons active'
+      : $selTurretVariant === 'anti-tank' ? '💥 ANTI-TANK — heavy cannon active'
+      : '🔥 ARTILLERY — howitzer online'}
     </div>
     {/if}
   </div>
@@ -456,6 +496,10 @@
   .node-pip.player.radar { border-color:#00FFCC; background:rgba(0,255,200,0.15); color:#00FFCC; }
   .node-pip.beachgun { border-color:#884400; background:rgba(255,100,0,0.08); color:#FF8844; }
   .node-pip.player.beachgun { border-color:#FF6600; background:rgba(255,100,0,0.16); color:#FFAA44; }
+  .node-pip.park { border-color:#226622; background:rgba(20,100,20,0.12); color:#44CC44; }
+  .node-pip.player.park { border-color:#44FF44; background:rgba(30,180,30,0.18); color:#88FF88; }
+  .node-pip.engineer { border-color:#6A5A00; background:rgba(180,140,0,0.1); color:#DDBB44; }
+  .node-pip.player.engineer { border-color:#FFCC22; background:rgba(255,200,0,0.15); color:#FFE066; }
   .node-label { font-size:7px; letter-spacing:0.5px; }
   .wave-box { display:flex; justify-content:space-between; align-items:center; padding:4px 10px; font-size:9px; color:#557755; border-bottom:1px solid #1A2E1A; background:#0B120B; transition:background 0.3s; }
   .wave-box.incoming { background:#1A0A08; color:#FF4422; }
@@ -497,6 +541,17 @@
   .ai-turret-btn:hover:not(:disabled) { background:#112A12; border-color:#33AA44; }
   .at-turret-btn { background:#1A1008; border-color:#5A3010; color:#FF9944; }
   .at-turret-btn:hover:not(:disabled) { background:#261812; border-color:#AA6622; }
+  .art-turret-btn { background:#201800; border-color:#705800; color:#FFEE44; }
+  .art-turret-btn:hover:not(:disabled) { background:#2E2200; border-color:#FFCC00; }
+  .mrk-btn { background:#081A10; border-color:#0E4A2A; color:#88FFAA; }
+  .mrk-btn:hover:not(:disabled) { background:#0E2818; border-color:#22CC66; }
+  .arm-build-btn { background:#0A1020; border-color:#1A3060; color:#88AAFF; }
+  .arm-build-btn:hover:not(:disabled) { background:#121830; border-color:#3355AA; }
+  .armoury-section { background:#080C18; border-color:#1A2848; }
+  .armoury-section .section-label { color:#88AAFF; }
+  .arm-upg-btn { background:#0A1020; border-color:#1A3060; color:#AACCFF; }
+  .arm-upg-btn:hover:not(:disabled) { background:#121830; border-color:#4466CC; }
+  .arm-upg-btn.done { background:#060A16; border-color:#0E1C40; color:#445588; cursor:default; }
   .bm-section { background:#0E0D08; border-color:#3A3010; }
   .bm-section .section-label { color:#AA9930; }
   .bm-btn { background:#1A1500; border-color:#6A5800; color:#FFD700; }

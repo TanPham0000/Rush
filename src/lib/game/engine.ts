@@ -3,7 +3,7 @@ import {
   BDEF, WAVES, ENDLESS_INTERVAL,
   FOG_CELL, FOG_COLS, FOG_ROWS,
   TRAIN_TIME, UNIT_COST, HOLD_WIN_TIME,
-  MAPS, C,
+  MAPS, C, ARMOURY_UPGRADES,
 } from './constants';
 import type { BType, MapDef } from './constants';
 import { rnd, rndi, hypot, clamp, resetIds, nextId } from './utils';
@@ -11,7 +11,7 @@ import { TerrainMap } from './terrain';
 import {
   Building, Turret, TiberiumField, Projectile,
   Unit, Tank, HeavyTank, Grenadier, Artillery, Scout, AntitankGun,
-  Harvester, EnemyUnit, CaptureNode,
+  Marksman, Harvester, EnemyUnit, CaptureNode,
   type GameRef, type Entity, type TurretVariant,
 } from './entities';
 import {
@@ -21,6 +21,7 @@ import {
   statusMsg, selHasBarracks, selHasRefinery, selHasWarFactory, selHasUnits,
   hasBarracks, hasRefinery, hasTechLab, hasWarFactory, selHasTechLab,
   selHasTurret, selTurretVariant,
+  hasArmoury, selHasArmoury,
   warFactoryHp, warFactoryMaxHp,
   enemiesKilled, unitsLost, unitsProduced,
   selBuildingQueue, captureNodesState, holdProgress,
@@ -129,6 +130,7 @@ export class Engine {
   _eBuildTimer:       number=4;    // seconds until next build decision
   _eNextInfantry:     number=9999; // game-time when to train next infantry batch
   _eNextTank:         number=9999; // game-time when to train next tank
+  _eNoHarvTimer:      number=0;    // countdown to free harvester if enemy has none
   _eRef:              GameRef|null=null;
 
   private _raf:number=0;
@@ -163,7 +165,7 @@ export class Engine {
     this._enemiesKilled=0; this._unitsLost=0; this._unitsProduced=0;
     this._tibSpawnTimer=rnd(55,80); this._tibSpawnCount=0; this._tibRespawnQueue=[];
     this._gameTime=0; this._waveIndex=0; this._wavesPassed=0;
-    this._spawnTimer=WAVES[0].at; this._wavePending=false;
+    this._spawnTimer=WAVES[0].at; this._wavePending=false; this._waveLabel=0;
     this._queues=new Map(); this._upgrades=new Set();
     this._fogGrid=new Uint8Array(FOG_COLS*FOG_ROWS);
     this._camX=0; this._camY=300; this._zoom=1.0;
@@ -174,7 +176,7 @@ export class Engine {
     this._radarActive=false; this._beachGunId=null;
     // ── Eco AI state reset ────────────────────────────────────
     this._eCredits=400; this._eBuildTimer=3;
-    this._eNextInfantry=9999; this._eNextTank=9999;
+    this._eNextInfantry=9999; this._eNextTank=9999; this._eNoHarvTimer=0;
 
     this._ref.buildings=this.buildings;
     this._ref.tibFields=this.tibFields;
@@ -332,7 +334,7 @@ export class Engine {
 
     // ── Capture nodes ─────────────────────────────────────────
     this.captureNodes=md.captureNodes.map(n=>
-      new CaptureNode(n.cx,n.cy,n.label,n.income,n.isCenter,n.isBlackMarket??false,n.isRadar??false,n.isBeachGun??false)
+      new CaptureNode(n.cx,n.cy,n.label,n.income,n.isCenter,n.isBlackMarket??false,n.isRadar??false,n.isBeachGun??false,n.isPark??false,n.isEngineer??false)
     );
 
     this._recalcPower();
@@ -475,6 +477,8 @@ export class Engine {
     };
     if(hasHT) spawn(HeavyTank,2); else spawn(Tank,3);
     if(hasGR) spawn(Grenadier,3); else spawn(Unit,3);
+    // Apply Armoury buffs to newly spawned infantry reinforcements
+    for(const u of this.pUnits) this._applyArmouryBuffs(u);
     this._ref.pUnits=this.pUnits;
     sound.reinforcements();
     this.setStatus('Reinforcements deployed!','success');
@@ -493,7 +497,7 @@ export class Engine {
   // ── TURRET UPGRADE ───────────────────────────────────────
   upgradeTurret(variant: TurretVariant){
     if(variant==='standard')return;
-    const costs:Record<string,number>={'anti-infantry':250,'anti-tank':350};
+    const costs:Record<string,number>={'anti-infantry':250,'anti-tank':350,'artillery':600};
     const cost=costs[variant]??999;
     const t=this._selected.find(e=>e instanceof Turret&&e.team==='player') as Turret|undefined;
     if(!t)return this.setStatus('Select a turret first!','warn');
@@ -503,7 +507,7 @@ export class Engine {
     this._credits-=cost;
     t.upgrade(variant);
     sound.upgrade();
-    const label=variant==='anti-infantry'?'Anti-Infantry':'Anti-Tank';
+    const label=variant==='anti-infantry'?'Anti-Infantry':variant==='anti-tank'?'Anti-Tank':'Artillery';
     this.setStatus(`Turret upgraded → ${label}!`,'success');
     this._recalcPower();
     this._syncStores();
@@ -530,8 +534,46 @@ export class Engine {
     if(!this.buildings.some(b=>b.team==='player'&&b.type==='Construction Yard'))return this.setStatus('Construction Yard required!','error');
     if(type==='Tech Lab'&&!this.buildings.some(b=>b.team==='player'&&b.type==='Barracks'))return this.setStatus('Barracks required for Tech Lab!','error');
     if(type==='War Factory'&&!this.buildings.some(b=>b.team==='player'&&b.type==='Tech Lab'))return this.setStatus('Tech Lab required for War Factory!','error');
+    if(type==='Armoury'&&!this.buildings.some(b=>b.team==='player'&&b.type==='Barracks'))return this.setStatus('Barracks required for Armoury!','error');
     this._buildMode=type; this._deselect();
     this.setStatus(`Click to place ${type}  ·  ESC = cancel`,'warn');
+    this._syncStores();
+  }
+
+  // ── ARMOURY UPGRADES ─────────────────────────────────────
+  /** Returns true if the unit is infantry (not a vehicle or harvester) */
+  _isInfantry(u: Unit): boolean {
+    return !(u instanceof Tank) && !(u instanceof HeavyTank) && !(u instanceof Artillery) &&
+           !(u instanceof Scout) && !(u instanceof AntitankGun) && !(u instanceof Harvester);
+  }
+
+  /** Apply all currently-researched Armoury buffs to a newly-spawned infantry unit */
+  _applyArmouryBuffs(u: Unit): void {
+    if(!this._isInfantry(u)) return;
+    if(this._upgrades.has('ArmUnitHp'))  { u.maxHp=Math.floor(u.maxHp*1.20); u.hp=u.maxHp; }
+    if(this._upgrades.has('ArmUnitDmg')) { u.atkDmg*=1.20; }
+    if(this._upgrades.has('ArmUnitSpd')) { u.speed*=1.15; }
+    if(this._upgrades.has('ArmTrench'))  { u.canEntrench=true; }
+  }
+
+  researchArmouryUpgrade(key:string){
+    if(this._upgrades.has(key))return this.setStatus('Already researched!','warn');
+    if(!this.buildings.some(b=>b.team==='player'&&b.type==='Armoury'))return this.setStatus('Armoury required!','error');
+    const upg=ARMOURY_UPGRADES.find(u=>u.key===key);
+    if(!upg)return;
+    if(this._credits<upg.cost)return this.setStatus('Not enough credits!','error');
+    this._credits-=upg.cost;
+    this._upgrades.add(key);
+    // Retroactively apply to existing player infantry
+    for(const u of this.pUnits){
+      if(!this._isInfantry(u))continue;
+      if(key==='ArmUnitHp')  { u.maxHp=Math.floor(u.maxHp*1.20); u.hp=Math.min(u.hp*1.20,u.maxHp); }
+      if(key==='ArmUnitDmg') { u.atkDmg*=1.20; }
+      if(key==='ArmUnitSpd') { u.speed*=1.15; }
+      if(key==='ArmTrench')  { u.canEntrench=true; }
+    }
+    sound.upgrade();
+    this.setStatus(`${upg.label} researched!`,'success');
     this._syncStores();
   }
 
@@ -559,6 +601,7 @@ export class Engine {
   // ── Barracks ──────────────────────────────────────────────
   trainInfantry() { this._queueTrain('Barracks',this._upgrades.has('Grenadier')?'Grenadier':'Infantry',UNIT_COST['Infantry']); }
   trainScout()     { this._queueTrain('Barracks','Scout',UNIT_COST['Scout']); }
+  trainMarksman()  { this._queueTrain('Barracks','Marksman',UNIT_COST['Marksman']); }
   trainAntitank(){
     if(!this._upgrades.has('AntitankGun'))return this.setStatus('AntitankGun upgrade required!','error');
     this._queueTrain('Barracks','AntitankGun',UNIT_COST['AntitankGun']);
@@ -597,6 +640,7 @@ export class Engine {
         let u:Unit;
         switch(item.type){
           case 'Grenadier':   u=new Grenadier(spawnX,spawnY,'player'); break;
+          case 'Marksman':    u=new Marksman(spawnX,spawnY,'player'); break;
           case 'Tank':        u=new Tank(spawnX,spawnY,'player'); break;
           case 'HeavyTank':   u=new HeavyTank(spawnX,spawnY,'player'); break;
           case 'Artillery':   u=new Artillery(spawnX,spawnY,'player'); break;
@@ -607,6 +651,8 @@ export class Engine {
         }
         u._game=this._ref;
         if(u instanceof Harvester)u._speedMult=this._powerOk?1.0:0.6;
+        // Apply Armoury buffs to newly trained infantry
+        this._applyArmouryBuffs(u);
         if(bld.rallyPoint)u.moveTo(bld.rallyPoint.x,bld.rallyPoint.y);
         this.pUnits.push(u); this._ref.pUnits=this.pUnits;
         this._unitsProduced++;
@@ -802,8 +848,9 @@ export class Engine {
     this.projectiles.forEach(p=>p.update(dt));
     for(const p of this.projectiles){
       if(p.dead&&p.splash>0){
-        // Apply splash to all nearby enemies
-        const targets=p.firedBy?.team==='player'?this.eUnits:this.pUnits;
+        // Determine shooter team: prefer firedBy.team, fallback to shooterTeam (for turrets)
+        const sTeam=p.firedBy?.team??p.shooterTeam??'enemy';
+        const targets=sTeam==='player'?this.eUnits:this.pUnits;
         for(const t of targets){
           if(!t.isAlive())continue;
           const d=hypot(t.x,t.y,p.x,p.y);
@@ -812,7 +859,17 @@ export class Engine {
             t.takeDmg(dmg);
           }
         }
-        this._boom(p.x,p.y,p.firedBy?.team??'enemy');
+        // Artillery splash also damages enemy buildings
+        if(p.shooterTeam==='player'&&p.splash>50){
+          for(const b of this.buildings.filter(b=>b.team==='enemy')){
+            const d=hypot(b.cx,b.cy,p.x,p.y);
+            if(d<p.splash){
+              const dmg=p.dmg*(1-d/p.splash)*0.4;
+              b.takeDmg(dmg);
+            }
+          }
+        }
+        this._boom(p.x,p.y,sTeam);
       }
     }
     this.projectiles=this.projectiles.filter(p=>!p.dead);
@@ -1156,6 +1213,21 @@ export class Engine {
       }
     }
 
+    // ── Enemy harvester respawn: free one after 25s with no harvesters ──
+    const eHarvs=this.eUnits.filter(u=>u instanceof Harvester&&u.isAlive());
+    const eRefB=this.buildings.find(b=>b.type==='Refinery'&&b.team==='enemy'&&b.isReady);
+    if(eRefB&&eHarvs.length===0){
+      this._eNoHarvTimer+=dt;
+      if(this._eNoHarvTimer>=25&&this._eRef){
+        const eh=new Harvester(eRefB.cx+80,eRefB.cy,this._eRef,'enemy');
+        this.eUnits.push(eh);
+        this._eNoHarvTimer=0;
+        this.setStatus('Enemy received emergency harvester','warn');
+      }
+    } else {
+      this._eNoHarvTimer=0;
+    }
+
     this._ref.pUnits=this.pUnits;
   }
 
@@ -1462,7 +1534,9 @@ export class Engine {
     hasRefinery.set(this.buildings.some(b=>b.team==='player'&&b.type==='Refinery'));
     hasTechLab.set(this.buildings.some(b=>b.team==='player'&&b.type==='Tech Lab'));
     hasWarFactory.set(this.buildings.some(b=>b.team==='player'&&b.type==='War Factory'));
+    hasArmoury.set(this.buildings.some(b=>b.team==='player'&&b.type==='Armoury'));
     selHasBarracks.set(this._selected.some(e=>e instanceof Building&&e.type==='Barracks'&&e.team==='player'));
+    selHasArmoury.set(this._selected.some(e=>e instanceof Building&&e.type==='Armoury'&&e.team==='player'));
     const selTurret=this._selected.find(e=>e instanceof Turret&&e.team==='player') as Turret|undefined;
     selHasTurret.set(!!selTurret); selTurretVariant.set(selTurret?.variant??'standard');
     selHasRefinery.set(this._selected.some(e=>e instanceof Building&&e.type==='Refinery'&&e.team==='player'));
@@ -1482,7 +1556,7 @@ export class Engine {
       const q=this._queues.get(selBld.id)??[];
       selBuildingQueue.set({head:q[0]?{type:q[0].type,pct:1-q[0].timer/q[0].maxTimer}:null,rest:q.slice(1).map(qi=>qi.type)});
     } else { selBuildingQueue.set({head:null,rest:[]}); }
-    captureNodesState.set(this.captureNodes.map(n=>({label:n.label,team:n.team,progress:n.progress,isCenter:n.isCenter,isBlackMarket:n.isBlackMarket,isRadar:n.isRadar,isBeachGun:n.isBeachGun,holdTimer:n.holdTimer})));
+    captureNodesState.set(this.captureNodes.map(n=>({label:n.label,team:n.team,progress:n.progress,isCenter:n.isCenter,isBlackMarket:n.isBlackMarket,isRadar:n.isRadar,isBeachGun:n.isBeachGun,isPark:n.isPark,isEngineer:n.isEngineer,holdTimer:n.holdTimer})));
     const center=this.captureNodes.find(n=>n.isCenter);
     holdProgress.set(center?center.holdTimer:0);
     selected.set([...this._selected]);

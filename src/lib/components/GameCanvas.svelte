@@ -104,6 +104,7 @@
     if (k === 'F') { engine.enterBuild('Refinery');    return; }
     if (k === 'T') { engine.enterBuild('Turret');      return; }
     if (k === 'K') { engine.enterBuild('Tech Lab');    return; }
+    if (k === 'O') { engine.enterBuild('Armoury');     return; }
   }
 
   function onKeyUp(e: KeyboardEvent) {

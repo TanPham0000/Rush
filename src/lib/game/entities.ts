@@ -220,6 +220,33 @@ export class Building extends Entity {
       ctx.beginPath(); ctx.arc(x+9,y+9,7,-Math.PI*0.8,Math.PI*0.1); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(x+9,y+9); ctx.lineTo(x+13,y+6); ctx.stroke();
 
+    } else if (this.type === 'Armoury') {
+      // Armoury — shield emblem + weapon racks
+      // Shield outline (main feature)
+      const shX=this.cx, shY=this.cy-2, shW=22, shH=24;
+      ctx.fillStyle=pl?'#0A1A40':'#400A0A';
+      ctx.beginPath();
+      ctx.moveTo(shX-shW/2,shY-shH/2); ctx.lineTo(shX+shW/2,shY-shH/2);
+      ctx.lineTo(shX+shW/2,shY+shH*0.2); ctx.lineTo(shX,shY+shH/2);
+      ctx.lineTo(shX-shW/2,shY+shH*0.2); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle=pl?C.allyAccent:'#FF8888'; ctx.lineWidth=1.5; ctx.stroke();
+      // Shield boss (center circle)
+      ctx.fillStyle=pl?C.allyGold:'#FFAAAA';
+      ctx.beginPath(); ctx.arc(shX,shY-1,4,0,Math.PI*2); ctx.fill();
+      // Rifle racks — two horizontal bars on left side
+      ctx.strokeStyle=pl?C.allyDark:C.enemyDark; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(x+4,y+h-20); ctx.lineTo(x+4,y+8); ctx.stroke();
+      // Diagonal rifle shapes
+      ctx.strokeStyle=pl?C.allyChr:C.enemyLight; ctx.lineWidth=1;
+      for(let i=0;i<3;i++){
+        ctx.beginPath(); ctx.moveTo(x+6,y+10+i*9); ctx.lineTo(x+16,y+7+i*9); ctx.stroke();
+      }
+      // Stars/pips on right side
+      ctx.fillStyle=pl?C.allyAccent:C.enemyAccent;
+      for(let i=0;i<3;i++){
+        ctx.beginPath(); ctx.arc(x+w-8,y+8+i*10,2.5,0,Math.PI*2); ctx.fill();
+      }
+
     } else if (this.type === 'War Factory') {
       // Large industrial complex — factory floor + gantry crane
       ctx.fillStyle=accent;
@@ -308,7 +335,7 @@ export class Building extends Entity {
 // ═══════════════════════════════════════════════════════════════
 // TURRET
 // ═══════════════════════════════════════════════════════════════
-export type TurretVariant = 'standard' | 'anti-infantry' | 'anti-tank';
+export type TurretVariant = 'standard' | 'anti-infantry' | 'anti-tank' | 'artillery';
 
 export class Turret extends Building {
   atkDmg   = 32;
@@ -335,11 +362,16 @@ export class Turret extends Building {
       this.atkDmg   = 14;   this.atkRange = 158;  this.atkRate  = 3.4;
       this.maxHp    = 420;  this.hp = Math.min(this.hp, 420);
       this.projColor = '#66FF99';
-    } else {
+    } else if (v === 'anti-tank') {
       // Heavy AT cannon — slow, hard-hitting, punches armour
       this.atkDmg   = 90;   this.atkRange = 215;  this.atkRate  = 0.62;
       this.maxHp    = 560;  this.hp = Math.min(this.hp, 560);
       this.projColor = '#FF8800';
+    } else if (v === 'artillery') {
+      // Long-range howitzer — massive splash, devastates buildings and clusters
+      this.atkDmg   = 140;  this.atkRange = 340;  this.atkRate  = 0.22;
+      this.maxHp    = 480;  this.hp = Math.min(this.hp, 480);
+      this.projColor = '#FFEE00';
     }
   }
 
@@ -348,11 +380,14 @@ export class Turret extends Building {
                       (target instanceof EnemyUnit && (target as EnemyUnit).isTank);
     if (this.variant === 'anti-infantry') return isArmored ? 0.28 : 1.0;
     if (this.variant === 'anti-tank')     return isArmored ? 1.65 : 0.42;
+    if (this.variant === 'artillery')     return target instanceof Building ? 2.5 : 1.0;
     return 1.0;
   }
 
   update(dt: number, targets: Entity[], projectiles: Projectile[]) {
     super.update(dt, targets, projectiles);
+    // Don't fire while still under construction
+    if (this.buildPct < 1) { this.atkTarget=null; return; }
     if (this.disabled) { this.atkTarget=null; return; }
     if (this.atkCd>0) this.atkCd -= dt;
     if (!this.atkTarget?.isAlive()) {
@@ -364,7 +399,7 @@ export class Turret extends Building {
     if (this.atkTarget) {
       const dx=this.atkTarget.cx-this.cx, dy=this.atkTarget.cy-this.cy;
       const targetAng=Math.atan2(dy,dx);
-      const lerpSpeed=this.variant==='anti-tank'?3.5:5;
+      const lerpSpeed=this.variant==='anti-tank'?3.5:this.variant==='artillery'?2.5:5;
       this.barrel=lerpAngle(this.barrel,targetAng,Math.min(1,dt*lerpSpeed));
       this.barrel2=lerpAngle(this.barrel2,targetAng+0.18,Math.min(1,dt*lerpSpeed));
       let diff=targetAng-this.barrel;
@@ -373,7 +408,11 @@ export class Turret extends Building {
         const d=hypot(this.cx,this.cy,this.atkTarget.cx,this.atkTarget.cy);
         if(d<=this.atkRange){
           const dmg=this.atkDmg*this._variantDmg(this.atkTarget);
-          projectiles.push(new Projectile(this.cx,this.cy,this.atkTarget,dmg,480,this.projColor));
+          const proj=new Projectile(this.cx,this.cy,this.atkTarget,dmg,
+            this.variant==='artillery'?260:480,this.projColor);
+          if(this.variant==='artillery') proj.splash=75;
+          proj.shooterTeam=this.team;
+          projectiles.push(proj);
           this.atkCd=1/this.atkRate;
         }
       }
@@ -389,6 +428,7 @@ export class Turret extends Building {
     const baseColor = this._flash>0?'#FFF'
       : this.variant==='anti-infantry' ? (pl?'#163A1A':'#3A1414')
       : this.variant==='anti-tank'     ? (pl?'#102030':'#301010')
+      : this.variant==='artillery'     ? (pl?'#2A2000':'#2A1800')
       : (pl?C.allyDark:C.enemyDark);
 
     // Drop shadow
@@ -411,6 +451,11 @@ export class Turret extends Building {
         ctx.fillStyle=sbColor; ctx.fill();
         ctx.strokeStyle='rgba(0,0,0,0.4)'; ctx.lineWidth=0.7; ctx.stroke();
       }
+    } else if (this.variant==='artillery') {
+      // Wide blast-shield ring (larger than standard)
+      ctx.beginPath(); ctx.arc(this.cx,this.cy,15,0,Math.PI*2);
+      ctx.strokeStyle='#664400'; ctx.lineWidth=4; ctx.stroke();
+      ctx.strokeStyle='rgba(255,200,0,0.12)'; ctx.lineWidth=1.5; ctx.stroke();
     } else {
       // Reinforced concrete ring
       const ringColor=this.variant==='anti-tank'?'#1A2A3A':'#1A3A20';
@@ -422,7 +467,9 @@ export class Turret extends Building {
     // Range ring when selected
     if (this.selected) {
       const ringCol=this.variant==='anti-infantry'?'rgba(100,255,150,0.15)'
-        :this.variant==='anti-tank'?'rgba(255,130,0,0.15)':'rgba(0,255,80,0.15)';
+        :this.variant==='anti-tank'?'rgba(255,130,0,0.15)'
+        :this.variant==='artillery'?'rgba(255,220,0,0.12)'
+        :'rgba(0,255,80,0.15)';
       ctx.beginPath(); ctx.arc(this.cx,this.cy,this.atkRange,0,Math.PI*2);
       ctx.strokeStyle=ringCol; ctx.lineWidth=1; ctx.setLineDash([5,8]); ctx.stroke(); ctx.setLineDash([]);
       drawBrackets(ctx,x-4,y-4,w+8,h+8,7);
@@ -433,6 +480,7 @@ export class Turret extends Building {
     const headColor=this.disabled?'#333'
       : this.variant==='anti-infantry'?(pl?'#22AA44':'#AA2222')
       : this.variant==='anti-tank'    ?(pl?'#1A3A6A':'#6A1A1A')
+      : this.variant==='artillery'    ?(pl?'#886600':'#664400')
       : accent;
 
     ctx.beginPath(); ctx.arc(this.cx,this.cy,10,0,Math.PI*2);
@@ -473,8 +521,20 @@ export class Turret extends Building {
       ctx.fillStyle=this.disabled?'#444':'#8899AA';
       ctx.fillRect(28,-6,6,12); // muzzle brake
       ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(0,-1,34,2); // seam
-      // Barrel details
       ctx.fillStyle='rgba(255,255,255,0.15)'; ctx.fillRect(2,-4.5,30,2.5);
+
+    } else if (this.variant==='artillery') {
+      // Massive howitzer — wide elevated barrel with distinctive muzzle bell
+      ctx.rotate(this.barrel);
+      ctx.fillStyle=this.disabled?'#444':'#CCAA44';
+      ctx.fillRect(0,-6,38,12);    // thick barrel
+      ctx.fillStyle=this.disabled?'#333':'#AA8830';
+      ctx.fillRect(32,-8,8,16);    // muzzle bell
+      ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(0,-1.5,38,3);  // centre seam
+      ctx.fillStyle='rgba(255,220,0,0.25)'; ctx.fillRect(2,-5,34,3);  // highlight
+      // Recoil shield behind barrel
+      ctx.fillStyle=this.disabled?'#333':'#886622';
+      ctx.fillRect(-10,-9,12,18);
 
     } else {
       // Standard single barrel
@@ -486,8 +546,8 @@ export class Turret extends Building {
 
     // Variant badge
     if (this.variant!=='standard' && this.team==='player') {
-      const badge=this.variant==='anti-infantry'?'AI':'AT';
-      const bCol=this.variant==='anti-infantry'?'#22FF66':'#FF8800';
+      const badge=this.variant==='anti-infantry'?'AI':this.variant==='anti-tank'?'AT':'ART';
+      const bCol=this.variant==='anti-infantry'?'#22FF66':this.variant==='anti-tank'?'#FF8800':'#FFEE00';
       ctx.fillStyle=bCol; ctx.font='bold 6px "Courier New"'; ctx.textAlign='center';
       ctx.fillText(badge,this.cx,y+h+10); ctx.textAlign='left';
     }
@@ -527,14 +587,24 @@ export class TiberiumField {
   capacity:  number;
   remaining: number;
   radius:    number = 52;
-  regenRate: number = 2.2;
+  regenRate: number = 2.8;
+  isRich:    boolean = false;
   private _crystals: Array<{x:number;y:number;h:number;w:number;angle:number}>=[];
 
   constructor(cx: number, cy: number) {
     this.id=nextId(); this.cx=cx; this.cy=cy;
-    this.capacity=rnd(800,1400); this.remaining=this.capacity;
-    const n=rndi(12,20);
-    for(let i=0;i<n;i++) this._crystals.push({x:cx+rnd(-36,36),y:cy+rnd(-36,36),h:rnd(12,24),w:rnd(4,8.5),angle:rnd(-0.3,0.3)});
+    // 30% chance of a rich (high-yield) field
+    this.isRich = Math.random() < 0.30;
+    if (this.isRich) {
+      this.capacity = rnd(3500, 5500);
+      this.radius   = 64;
+    } else {
+      this.capacity = rnd(1500, 2800);
+    }
+    this.remaining=this.capacity;
+    const n = this.isRich ? rndi(18,26) : rndi(12,20);
+    const spread = this.isRich ? 44 : 36;
+    for(let i=0;i<n;i++) this._crystals.push({x:cx+rnd(-spread,spread),y:cy+rnd(-spread,spread),h:rnd(this.isRich?18:12,this.isRich?32:24),w:rnd(4,9),angle:rnd(-0.3,0.3)});
   }
 
   isEmpty()  { return this.remaining<=0; }
@@ -544,27 +614,38 @@ export class TiberiumField {
 
   draw(ctx: CanvasRenderingContext2D, t: number) {
     const p=this.pct(); if(p<=0)return;
+    // Rich fields get a warm golden-green aura
+    const stainAlpha = this.isRich ? 0.22*p : 0.13*p;
+    const stainColor = this.isRich ? `rgba(120,220,0,${stainAlpha})` : `rgba(0,200,70,${stainAlpha})`;
     const stain=ctx.createRadialGradient(this.cx,this.cy,0,this.cx,this.cy,this.radius*p);
-    stain.addColorStop(0,`rgba(0,200,70,${0.13*p})`); stain.addColorStop(1,'rgba(0,0,0,0)');
+    stain.addColorStop(0,stainColor); stain.addColorStop(1,'rgba(0,0,0,0)');
     ctx.fillStyle=stain; ctx.beginPath(); ctx.arc(this.cx,this.cy,this.radius*p,0,Math.PI*2); ctx.fill();
-    // Animated pulse (shimmer)
-    const pulse=0.85+0.15*Math.sin(t*2.2);
-    const green=Math.floor(120+p*135);
+    // Animated pulse (shimmer) — rich fields pulse faster
+    const pulse = this.isRich ? 0.80+0.20*Math.sin(t*3.0) : 0.85+0.15*Math.sin(t*2.2);
+    const green = this.isRich ? Math.floor(160+p*95) : Math.floor(120+p*135);
+    const rChannel = this.isRich ? Math.floor(80+p*80) : 0;  // yellow-gold tinge for rich
     for(const c of this._crystals){
       const sh=c.h*p*pulse; ctx.save(); ctx.translate(c.x,c.y); ctx.rotate(c.angle);
-      ctx.fillStyle=`rgb(0,${green},${Math.floor(green*0.28)})`;
+      ctx.fillStyle=`rgb(${rChannel},${green},${Math.floor(green*0.28)})`;
       ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-c.w/2,sh); ctx.lineTo(c.w/2,sh); ctx.closePath(); ctx.fill();
-      ctx.fillStyle=`rgba(${Math.floor(green*0.3)},${Math.min(255,green+90)},${Math.floor(green*0.5)},0.7)`;
+      const r2=this.isRich?Math.min(255,rChannel+40):Math.floor(green*0.3);
+      ctx.fillStyle=`rgba(${r2},${Math.min(255,green+90)},${Math.floor(green*0.5)},0.7)`;
       ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-c.w/4,sh*0.45); ctx.lineTo(c.w/4,sh*0.45); ctx.closePath(); ctx.fill();
       // Inner glow shimmer
       ctx.globalAlpha=0.3+0.2*Math.sin(t*3.1+c.x);
-      ctx.fillStyle=`rgba(0,255,120,0.5)`;
+      ctx.fillStyle=this.isRich?`rgba(180,255,60,0.6)`:`rgba(0,255,120,0.5)`;
       ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-c.w/6,sh*0.3); ctx.lineTo(c.w/6,sh*0.3); ctx.closePath(); ctx.fill();
       ctx.globalAlpha=1;
       ctx.restore();
     }
     ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(this.cx-24,this.cy+this.radius-3,48,4);
-    ctx.fillStyle=`rgba(0,${Math.floor(200*p+40)},60,0.9)`; ctx.fillRect(this.cx-24,this.cy+this.radius-3,48*p,4);
+    const barColor = this.isRich ? `rgba(180,${Math.floor(200*p+40)},0,0.9)` : `rgba(0,${Math.floor(200*p+40)},60,0.9)`;
+    ctx.fillStyle=barColor; ctx.fillRect(this.cx-24,this.cy+this.radius-3,48*p,4);
+    // Rich field label
+    if (this.isRich) {
+      ctx.fillStyle='rgba(200,220,0,0.85)'; ctx.font='bold 7px "Courier New"'; ctx.textAlign='center';
+      ctx.fillText('★RICH', this.cx, this.cy+this.radius+10); ctx.textAlign='left';
+    }
   }
 }
 
@@ -582,16 +663,19 @@ export class CaptureNode {
   isBlackMarket:boolean;
   isRadar:      boolean;
   isBeachGun:   boolean;
+  isPark:       boolean;
+  isEngineer:   boolean;
   holdTimer:    number = 0;
   label:        string;
   blackMarketClaimed: boolean = false;
   beachGunSpawned:    boolean = false;
   radarActivated:     boolean = false;
 
-  constructor(cx:number,cy:number,label:string,income=4,isCenter=false,isBlackMarket=false,isRadar=false,isBeachGun=false){
+  constructor(cx:number,cy:number,label:string,income=4,isCenter=false,isBlackMarket=false,isRadar=false,isBeachGun=false,isPark=false,isEngineer=false){
     this.id=nextId(); this.cx=cx; this.cy=cy; this.label=label;
     this.income=income; this.isCenter=isCenter; this.isBlackMarket=isBlackMarket;
     this.isRadar=isRadar; this.isBeachGun=isBeachGun;
+    this.isPark=isPark; this.isEngineer=isEngineer;
   }
 
   update(dt:number,pUnits:Unit[],eUnits:Unit[]){
@@ -613,6 +697,38 @@ export class CaptureNode {
              :this.team==='enemy' ?C.captureEnemy
              :this.isBlackMarket  ?'#AA8800'
              :C.captureNeutral;
+
+    // ── City Park — green grass terrain under the node ─────
+    if (this.isPark) {
+      // Grass base
+      const grassGrad=ctx.createRadialGradient(this.cx,this.cy,0,this.cx,this.cy,this.radius*1.3);
+      grassGrad.addColorStop(0,'rgba(20,90,20,0.92)');
+      grassGrad.addColorStop(0.6,'rgba(14,70,14,0.80)');
+      grassGrad.addColorStop(1,'rgba(8,40,8,0.0)');
+      ctx.beginPath(); ctx.arc(this.cx,this.cy,this.radius*1.3,0,Math.PI*2);
+      ctx.fillStyle=grassGrad; ctx.fill();
+      // Animated grass blades (short radiating lines)
+      const bladeAnim=Math.sin(t*1.2)*0.06;
+      ctx.strokeStyle='rgba(50,160,50,0.5)'; ctx.lineWidth=1;
+      for(let i=0;i<12;i++){
+        const ang=i/12*Math.PI*2+bladeAnim;
+        const r1=this.radius*0.25, r2=this.radius*0.85;
+        ctx.beginPath();
+        ctx.moveTo(this.cx+Math.cos(ang)*r1,this.cy+Math.sin(ang)*r1);
+        ctx.lineTo(this.cx+Math.cos(ang)*r2,this.cy+Math.sin(ang)*r2);
+        ctx.stroke();
+      }
+      // Scattered tree dots
+      const treePos=[[0.55,0.2],[0.7,0.6],[0.5,0.78],[0.2,0.65],[0.3,0.25],[0.65,0.45]];
+      for(const[fr,fa] of treePos){
+        const ang=fa*Math.PI*2, r=fr*this.radius*0.8;
+        const tx=this.cx+Math.cos(ang)*r, ty=this.cy+Math.sin(ang)*r;
+        ctx.beginPath(); ctx.arc(tx,ty,5,0,Math.PI*2);
+        ctx.fillStyle='rgba(10,80,10,0.85)'; ctx.fill();
+        ctx.beginPath(); ctx.arc(tx,ty,3.5,0,Math.PI*2);
+        ctx.fillStyle='rgba(30,140,30,0.6)'; ctx.fill();
+      }
+    }
 
     const pulse=0.55+0.2*Math.sin(t*2.5+this.id);
     ctx.beginPath(); ctx.arc(this.cx,this.cy,this.radius,0,Math.PI*2);
@@ -639,6 +755,8 @@ export class CaptureNode {
     const nodeLabel = this.isBlackMarket?'🏴 '+this.label
                     : this.isRadar   ?'📡 '+this.label
                     : this.isBeachGun?'🔫 '+this.label
+                    : this.isPark    ?'🌳 '+this.label
+                    : this.isEngineer?'🔧 '+this.label
                     : this.label;
     ctx.fillText(nodeLabel,this.cx,this.cy+this.radius+14);
     if(this.team!=='neutral'){ctx.fillStyle=col; ctx.fillText(this.team.toUpperCase(),this.cx,this.cy+5);}
@@ -650,6 +768,14 @@ export class CaptureNode {
     if(this.isBeachGun&&!this.beachGunSpawned){
       ctx.fillStyle=this.team==='player'?'#FF6600':'#888'; ctx.font='bold 10px "Courier New"'; ctx.textAlign='center';
       ctx.fillText('🔫',this.cx,this.cy+4); ctx.textAlign='left';
+    }
+    if(this.isPark){
+      ctx.fillStyle=this.team==='player'?'#44FF44':'#226622'; ctx.font='bold 10px "Courier New"'; ctx.textAlign='center';
+      ctx.fillText('🌳',this.cx,this.cy+4); ctx.textAlign='left';
+    }
+    if(this.isEngineer){
+      ctx.fillStyle=this.team==='player'?'#FFCC44':'#887700'; ctx.font='bold 10px "Courier New"'; ctx.textAlign='center';
+      ctx.fillText('🔧',this.cx,this.cy+4); ctx.textAlign='left';
     }
     ctx.textAlign='left';
   }
@@ -667,6 +793,7 @@ export class Projectile {
   dead:     boolean=false;
   splash:   number=0;   // >0 = AOE radius
   firedBy:  Unit|null=null;
+  shooterTeam: Team|null=null;  // for turret splash (no circular Unit ref needed)
   private trail:Array<{x:number;y:number}>=[];
 
   constructor(sx:number,sy:number,target:Entity,dmg:number,spd:number,color:string){
@@ -732,7 +859,7 @@ export class Projectile {
 export class Unit extends Entity {
   x:number;y:number;
   radius:  number=8;
-  speed:   number=50;   // base infantry speed
+  speed:   number=42;   // base infantry speed
   angle:   number=0;
   _flash:  number=0;
   _speedMult: number=1;  // power / suppress modifier
@@ -761,6 +888,12 @@ export class Unit extends Entity {
   _suppressTimer: number=0;
   get suppressed(): boolean { return this._suppressTimer>0; }
 
+  // ── Entrench ──────────────────────────────────────────────
+  _stillTimer:  number=0;
+  entrenched:   boolean=false;
+  canEntrench:  boolean=false;  // enabled by Armoury upgrade
+  readonly ENTRENCH_TIME = 8;   // seconds to dig in
+
   _game: GameRef|null=null;
 
   constructor(x:number,y:number,team:Team){
@@ -777,8 +910,8 @@ export class Unit extends Entity {
     return this.x>=rx&&this.x<=rx+rw&&this.y>=ry&&this.y<=ry+rh;
   }
 
-  moveTo(tx:number,ty:number){ this.moveTarget={x:tx,y:ty}; this.atkTarget=null; this.guardPos=null; this.retreating=false; }
-  attack(t:Entity){ this.atkTarget=t; this.moveTarget=null; }
+  moveTo(tx:number,ty:number){ this.moveTarget={x:tx,y:ty}; this.atkTarget=null; this.guardPos=null; this.retreating=false; this._stillTimer=0; this.entrenched=false; }
+  attack(t:Entity){ this.atkTarget=t; this.moveTarget=null; this._stillTimer=0; this.entrenched=false; }
   stop()  { this.moveTarget=null; this.atkTarget=null; this.retreating=false; }
   guard() { this.guardPos={x:this.x,y:this.y}; this.atkTarget=null; this.moveTarget=null; this.retreating=false; }
 
@@ -787,6 +920,8 @@ export class Unit extends Entity {
       const cover=this._game.terrain.coverMult(this.x,this.y);
       d*=(1-cover);
     }
+    // Entrench: 40% damage reduction while dug in
+    if(this.entrenched) d*=0.60;
     super.takeDmg(d);
     this._flash=0.07;
     // Suppression: heavy fire slows you down
@@ -797,6 +932,18 @@ export class Unit extends Entity {
     if(this.atkCd>0) this.atkCd-=dt;
     if(this._flash>0) this._flash-=dt;
     if(this._suppressTimer>0) this._suppressTimer-=dt;
+
+    // Entrench: accumulate still-timer when fully idle (no orders, not retreating)
+    if(this.canEntrench){
+      const isIdle=!this.moveTarget&&!this.atkTarget&&!this.retreating;
+      if(isIdle){
+        this._stillTimer+=dt;
+        if(this._stillTimer>=this.ENTRENCH_TIME) this.entrenched=true;
+      } else {
+        if(this.entrenched){ this.entrenched=false; }
+        this._stillTimer=0;
+      }
+    }
 
     if(this.retreating&&!this.moveTarget){ this.retreating=false; this.autoAtk=true; }
 
@@ -949,6 +1096,26 @@ export class Unit extends Entity {
       ctx.fillStyle='rgba(255,200,0,0.7)';ctx.font='6px "Courier New"';ctx.textAlign='center';
       ctx.fillText('SUP',this.x,this.y-r-3);ctx.textAlign='left';
     }
+    // Entrench indicator: growing arc → full ring when entrenched
+    if(this.canEntrench&&this._stillTimer>0){
+      const pct=Math.min(this._stillTimer/this.ENTRENCH_TIME,1);
+      ctx.globalAlpha=0.80;
+      ctx.strokeStyle=this.entrenched?'#A0601A':'rgba(160,96,26,0.6)';
+      ctx.lineWidth=this.entrenched?2.5:1.5;
+      ctx.beginPath();
+      if(this.entrenched){ ctx.arc(this.x,this.y,r+5,0,Math.PI*2); }
+      else { ctx.arc(this.x,this.y,r+5,-Math.PI/2,-Math.PI/2+pct*Math.PI*2); }
+      ctx.stroke();
+      ctx.globalAlpha=1;
+      if(this.entrenched){
+        // Subtle dirt fill
+        ctx.globalAlpha=0.22; ctx.fillStyle='#6B4010';
+        ctx.beginPath(); ctx.arc(this.x,this.y,r+5,0,Math.PI*2); ctx.fill();
+        ctx.globalAlpha=1;
+        ctx.fillStyle='#C08030'; ctx.font='bold 5px "Courier New"'; ctx.textAlign='center';
+        ctx.fillText('ENTR',this.x,this.y+r+9); ctx.textAlign='left';
+      }
+    }
     this._drawVetPip(ctx,r);
     this._drawSelection(ctx);
     drawHpBar(ctx,this.x,this.y-r-10,22,this.hp,this.maxHp);
@@ -984,12 +1151,12 @@ export class Unit extends Entity {
 // GRENADIER — splash Infantry
 // ═══════════════════════════════════════════════════════════════
 export class Grenadier extends Unit {
-  splashRadius = 40;
+  splashRadius = 65;
 
   constructor(x:number,y:number,team:Team='player'){
     super(x,y,team);
-    this.hp=this.maxHp=110; this.atkDmg=18; this.atkRange=70; this.atkRate=0.9;
-    this.autoAtkRange=150; this.speed=46;
+    this.hp=this.maxHp=110; this.atkDmg=28; this.atkRange=70; this.atkRate=0.9;
+    this.autoAtkRange=150; this.speed=38;
     this.projColor=team==='player'?'#FF8800':'#FF6600';
   }
 
@@ -1029,6 +1196,50 @@ export class Grenadier extends Unit {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// MARKSMAN — long-range infantry sniper
+// ═══════════════════════════════════════════════════════════════
+export class Marksman extends Unit {
+  visionRadius = 350;
+
+  constructor(x:number,y:number,team:Team='player'){
+    super(x,y,team);
+    this.hp=this.maxHp=90; this.atkDmg=42; this.atkRange=190; this.atkRate=0.35;
+    this.autoAtkRange=280; this.speed=36;
+    this.projColor=team==='player'?'#CCFFCC':'#FFBBAA';
+  }
+
+  // Marksman: highly effective vs infantry, mediocre vs armour
+  targetMult(t: Entity): number {
+    if (t instanceof Tank || t instanceof HeavyTank) return 0.30;
+    if (t instanceof EnemyUnit && (t as EnemyUnit).isTank) return 0.30;
+    return 1.0;
+  }
+
+  draw(ctx:CanvasRenderingContext2D,dotMode=false){
+    if(dotMode){ctx.beginPath();ctx.arc(this.x,this.y,4,0,Math.PI*2);ctx.fillStyle='#CCFFCC';ctx.fill();return;}
+    super.draw(ctx,dotMode);
+    const r=this.radius;
+    // Sniper scope glint on helmet
+    ctx.save(); ctx.translate(this.x,this.y); ctx.rotate(this.angle);
+    // Long rifle barrel (sniper rifle — extends further)
+    ctx.fillStyle=this._flash>0?'#FFF':'#2A3A2A';
+    ctx.fillRect(r*0.38,-r*0.08,r*2.0,r*0.16);
+    // Scope (small green rectangle on top of barrel)
+    ctx.fillStyle=this._flash>0?'#EEE':'#225522';
+    ctx.fillRect(r*0.9,-r*0.22,r*0.55,r*0.22);
+    // Scope lens glint
+    ctx.fillStyle='rgba(100,255,100,0.7)';
+    ctx.beginPath(); ctx.arc(r*1.15,-r*0.11,r*0.1,0,Math.PI*2); ctx.fill();
+    // Ghillie camouflage (dark green overlay with low opacity)
+    ctx.globalAlpha=0.38;
+    ctx.fillStyle='#1A3A0A';
+    ctx.beginPath(); ctx.ellipse(0,0,r*0.65,r*0.85,0,0,Math.PI*2); ctx.fill();
+    ctx.globalAlpha=1;
+    ctx.restore();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // TANK
 // ═══════════════════════════════════════════════════════════════
 export class Tank extends Unit {
@@ -1036,7 +1247,7 @@ export class Tank extends Unit {
 
   constructor(x:number,y:number,team:Team='player'){
     super(x,y,team);
-    this.radius=12; this.speed=26; this.hp=this.maxHp=320;
+    this.radius=12; this.speed=22; this.hp=this.maxHp=320;
     this.atkDmg=46; this.atkRange=100; this.atkRate=0.65;
     this.projColor=team==='player'?'#FFDD44':'#FF8800';
     this.autoAtkRange=180;
@@ -1120,7 +1331,7 @@ export class Tank extends Unit {
 export class HeavyTank extends Tank {
   constructor(x:number,y:number,team:Team='player'){
     super(x,y,team);
-    this.radius=15; this.speed=21;
+    this.radius=15; this.speed=18;
     this.hp=this.maxHp=500; this.atkDmg=60; this.atkRate=0.55;
     this.projColor=team==='player'?'#00AAFF':'#FF4400';
   }
@@ -1213,7 +1424,7 @@ export class Artillery extends Unit {
 
   constructor(x:number,y:number,team:Team='player'){
     super(x,y,team);
-    this.radius=14; this.speed=22; this.hp=this.maxHp=180;
+    this.radius=14; this.speed=18; this.hp=this.maxHp=180;
     this.atkDmg=85; this.atkRange=280; this.atkRate=0.35;
     this.autoAtkRange=300; this.projColor=team==='player'?'#FFEE00':'#FF6600';
   }
@@ -1355,7 +1566,7 @@ export class Scout extends Unit {
 
   constructor(x:number,y:number,team:Team='player'){
     super(x,y,team);
-    this.radius=6; this.speed=105; this.hp=this.maxHp=45;
+    this.radius=6; this.speed=88; this.hp=this.maxHp=45;
     this.atkDmg=8; this.atkRange=55; this.atkRate=1.8;
     this.autoAtkRange=120;
     this.projColor=team==='player'?'#00FFCC':'#FF8844';
@@ -1438,7 +1649,7 @@ export class AntitankGun extends Unit {
 
   constructor(x:number,y:number,team:Team='player'){
     super(x,y,team);
-    this.radius=10; this.speed=34; this.hp=this.maxHp=140;
+    this.radius=10; this.speed=28; this.hp=this.maxHp=140;
     this.atkDmg=72; this.atkRange=120; this.atkRate=0.7;
     this.autoAtkRange=160;
     this.projColor=team==='player'?'#FF4400':'#FF8800';
@@ -1529,21 +1740,24 @@ export type HState='idle'|'to-field'|'harvesting'|'returning';
 export class Harvester extends Unit {
   state:       HState='idle';
   cargo:       number=0;
-  maxCargo:    number=140;
-  harvestRate: number=24;
+  maxCargo:    number=250;
+  harvestRate: number=28;
   targetField: TiberiumField|null=null;
   private _refinery: Building|null=null;
 
   constructor(x:number,y:number,game:GameRef,team:Team='player'){
     super(x,y,team);
-    this._game=game; this.radius=10; this.speed=50;
+    this._game=game; this.radius=10; this.speed=42;
     this.hp=this.maxHp=200; this.autoAtk=false;
   }
 
   update(dt:number,allUnits:Unit[],_proj:Projectile[]){
     if(this._flash>0)this._flash-=dt;
     const g=this._game!;
-    if(!this._refinery?.isAlive()) this._refinery=g.buildings.find(b=>b.type==='Refinery'&&b.team===this.team)??null;
+    // Always track the CLOSEST ready refinery so harvesters route efficiently
+    const refs=g.buildings.filter(b=>b.type==='Refinery'&&b.team===this.team&&b.isAlive());
+    if(refs.length) this._refinery=refs.reduce((best,b)=>hypot(this.x,this.y,b.cx,b.cy)<hypot(this.x,this.y,best.cx,best.cy)?b:best);
+    else this._refinery=null;
     if(this.state==='idle'){
       if(!this._refinery)return;
       if(this.moveTarget)return; // respect player move command — wait until we arrive
@@ -1560,8 +1774,11 @@ export class Harvester extends Unit {
     }
     if(this.state==='harvesting'){
       if(!this.targetField||this.targetField.remaining<2||this.cargo>=this.maxCargo){
+        // Re-evaluate closest refinery before heading back
+        const refs2=g.buildings.filter(b=>b.type==='Refinery'&&b.team===this.team&&b.isAlive());
+        if(refs2.length) this._refinery=refs2.reduce((best,b)=>hypot(this.x,this.y,b.cx,b.cy)<hypot(this.x,this.y,best.cx,best.cy)?b:best);
         if(!this._refinery){this.state='idle';return;}
-        this.state='returning'; this.moveTo(this._refinery.cx,this._refinery.cy); return;
+        this.state='returning'; this.moveTarget={x:this._refinery.cx,y:this._refinery.cy}; return;
       }
       this.cargo+=this.targetField.harvest(dt,this.harvestRate*this._speedMult);
     }
@@ -1664,14 +1881,14 @@ export class EnemyUnit extends Unit {
 
   constructor(x:number,y:number,opts:EnemyOpts={}){
     super(x,y,'enemy');
-    this.speed=opts.speed??32; this.atkDmg=opts.dmg??11; this.atkRate=opts.rate??1.0;
+    this.speed=opts.speed??26; this.atkDmg=opts.dmg??11; this.atkRate=opts.rate??1.0;
     this.atkRange=opts.range??56; this.hp=this.maxHp=opts.hp??100;
     this.radius=opts.radius??8; this.isTank=opts.tank??false; this.isHeavy=opts.heavy??false;
     this.aggroRange=opts.aggro??240; this.projColor=this.isTank?C.enemyLight:C.enemyAccent;
     this.autoAtk=false; this._pauseTimer=rnd(0.5,1.5);
     this._homeX=x; this._homeY=y;
     if(this.isTank){
-      this.radius=12; this.speed=25;
+      this.radius=12; this.speed=20;
       this.hp=this.maxHp=this.isHeavy?500:320;
       this.atkDmg=this.isHeavy?60:46; this.atkRange=100; this.atkRate=this.isHeavy?0.55:0.65;
       this.autoAtkRange=180;

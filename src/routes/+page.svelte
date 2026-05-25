@@ -135,7 +135,12 @@
     }
     if (e.key === 'Enter' && $gameState === 'menu') {
       startGame();
-    } else if (e.key === 'Enter' && ($gameState === 'won' || $gameState === 'lost')) {
+    } else if (e.key === 'Enter' && $gameState === 'won') {
+      const nextIdx = Math.min((engine?._campaignMapIdx ?? 0) + 1, MAPS.length - 1);
+      briefingMap = MAPS[nextIdx] ?? MAPS[0];
+      engine?.restart();
+      showBriefing = true;
+    } else if (e.key === 'Enter' && $gameState === 'lost') {
       engine?.restart();
     } else if ((e.key === ' ' || e.key === 'Spacebar') && $gameState === 'playing') {
       e.preventDefault();
@@ -559,7 +564,17 @@
 
     <!-- Action buttons -->
     <div class="end-btns">
-      <button class="end-btn primary" onclick={() => engine?.restart()}>
+      <button class="end-btn primary" onclick={() => {
+        if ($gameState === 'won') {
+          // Show briefing for the NEXT map before restarting
+          const nextIdx = Math.min((engine?._campaignMapIdx ?? 0) + 1, MAPS.length - 1);
+          briefingMap = MAPS[nextIdx] ?? MAPS[0];
+          engine?.restart();
+          showBriefing = true;
+        } else {
+          engine?.restart();
+        }
+      }}>
         {$gameState === 'won' ? '▶ NEXT MISSION' : '↺ RETRY MISSION'}
       </button>
       <button class="end-btn secondary" onclick={() => gameState.set('menu')}>
