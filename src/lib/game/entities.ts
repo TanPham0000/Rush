@@ -3,6 +3,7 @@ import type { BType } from './constants';
 import { hypot, clamp, rnd, rndi, lerpAngle, nextId,
          drawBrackets, drawHpBar, hexA } from './utils';
 import type { TerrainMap } from './terrain';
+import { sound } from './sound';
 
 // ═══════════════════════════════════════════════════════════════
 // TYPES
@@ -369,7 +370,7 @@ export class Turret extends Building {
       this.projColor = '#FF8800';
     } else if (v === 'artillery') {
       // Long-range howitzer — massive splash, devastates buildings and clusters
-      this.atkDmg   = 140;  this.atkRange = 340;  this.atkRate  = 0.22;
+      this.atkDmg   = 140;  this.atkRange = 340;  this.atkRate  = 0.13;
       this.maxHp    = 480;  this.hp = Math.min(this.hp, 480);
       this.projColor = '#FFEE00';
     }
@@ -414,6 +415,10 @@ export class Turret extends Building {
           proj.shooterTeam=this.team;
           projectiles.push(proj);
           this.atkCd=1/this.atkRate;
+          // Turret weapon sounds
+          if (this.variant==='artillery') sound.artilleryFire();
+          else if (this.variant==='anti-tank') sound.tankFire();
+          else sound.unitFire();
         }
       }
     }
@@ -589,11 +594,11 @@ export class TiberiumField {
   radius:    number = 52;
   regenRate: number = 2.8;
   isRich:    boolean = false;
-  private _crystals: Array<{x:number;y:number;h:number;w:number;angle:number}>=[];
+  // Rounded rock shapes: rx/ry are semi-axes, phase offsets independent pulse per rock
+  private _rocks: Array<{x:number;y:number;rx:number;ry:number;angle:number;phase:number}>=[];
 
   constructor(cx: number, cy: number) {
     this.id=nextId(); this.cx=cx; this.cy=cy;
-    // 30% chance of a rich (high-yield) field
     this.isRich = Math.random() < 0.30;
     if (this.isRich) {
       this.capacity = rnd(3500, 5500);
@@ -601,10 +606,20 @@ export class TiberiumField {
     } else {
       this.capacity = rnd(1500, 2800);
     }
-    this.remaining=this.capacity;
-    const n = this.isRich ? rndi(18,26) : rndi(12,20);
-    const spread = this.isRich ? 44 : 36;
-    for(let i=0;i<n;i++) this._crystals.push({x:cx+rnd(-spread,spread),y:cy+rnd(-spread,spread),h:rnd(this.isRich?18:12,this.isRich?32:24),w:rnd(4,9),angle:rnd(-0.3,0.3)});
+    this.remaining = this.capacity;
+    const n      = this.isRich ? rndi(14,20) : rndi(9,14);
+    const spread = this.isRich ? 42 : 32;
+    for(let i=0;i<n;i++){
+      const rx = rnd(this.isRich ? 7 : 4.5, this.isRich ? 14 : 10);
+      this._rocks.push({
+        x:     cx + rnd(-spread, spread),
+        y:     cy + rnd(-spread, spread),
+        rx,
+        ry:    rx * rnd(0.45, 0.75),   // flatter than wide → natural rock profile
+        angle: rnd(-Math.PI, Math.PI),
+        phase: rnd(0, Math.PI*2),
+      });
+    }
   }
 
   isEmpty()  { return this.remaining<=0; }
@@ -614,36 +629,74 @@ export class TiberiumField {
 
   draw(ctx: CanvasRenderingContext2D, t: number) {
     const p=this.pct(); if(p<=0)return;
-    // Rich fields get a warm golden-green aura
-    const stainAlpha = this.isRich ? 0.22*p : 0.13*p;
-    const stainColor = this.isRich ? `rgba(120,220,0,${stainAlpha})` : `rgba(0,200,70,${stainAlpha})`;
+
+    // ── Ambient ground stain ───────────────────────────────────
+    const stainAlpha = this.isRich ? 0.16*p : 0.10*p;
+    const stainCol   = this.isRich ? `rgba(100,200,0,${stainAlpha})` : `rgba(0,180,60,${stainAlpha})`;
     const stain=ctx.createRadialGradient(this.cx,this.cy,0,this.cx,this.cy,this.radius*p);
-    stain.addColorStop(0,stainColor); stain.addColorStop(1,'rgba(0,0,0,0)');
+    stain.addColorStop(0,stainCol); stain.addColorStop(1,'rgba(0,0,0,0)');
     ctx.fillStyle=stain; ctx.beginPath(); ctx.arc(this.cx,this.cy,this.radius*p,0,Math.PI*2); ctx.fill();
-    // Animated pulse (shimmer) — rich fields pulse faster
-    const pulse = this.isRich ? 0.80+0.20*Math.sin(t*3.0) : 0.85+0.15*Math.sin(t*2.2);
-    const green = this.isRich ? Math.floor(160+p*95) : Math.floor(120+p*135);
-    const rChannel = this.isRich ? Math.floor(80+p*80) : 0;  // yellow-gold tinge for rich
-    for(const c of this._crystals){
-      const sh=c.h*p*pulse; ctx.save(); ctx.translate(c.x,c.y); ctx.rotate(c.angle);
-      ctx.fillStyle=`rgb(${rChannel},${green},${Math.floor(green*0.28)})`;
-      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-c.w/2,sh); ctx.lineTo(c.w/2,sh); ctx.closePath(); ctx.fill();
-      const r2=this.isRich?Math.min(255,rChannel+40):Math.floor(green*0.3);
-      ctx.fillStyle=`rgba(${r2},${Math.min(255,green+90)},${Math.floor(green*0.5)},0.7)`;
-      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-c.w/4,sh*0.45); ctx.lineTo(c.w/4,sh*0.45); ctx.closePath(); ctx.fill();
-      // Inner glow shimmer
-      ctx.globalAlpha=0.3+0.2*Math.sin(t*3.1+c.x);
-      ctx.fillStyle=this.isRich?`rgba(180,255,60,0.6)`:`rgba(0,255,120,0.5)`;
-      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-c.w/6,sh*0.3); ctx.lineTo(c.w/6,sh*0.3); ctx.closePath(); ctx.fill();
+
+    // ── Individual rocks ──────────────────────────────────────
+    // Slow independent pulse per rock: ~8-11 second cycle
+    const glowFreq = this.isRich ? 0.55 : 0.70;
+    const [gcR,gcG,gcB] = this.isRich ? [110,210,0] : [0,200,55];
+
+    for(const r of this._rocks){
+      const rawPulse = 0.78 + 0.22*Math.sin(t*glowFreq + r.phase);
+      const glow     = rawPulse * p;              // scales down as field depletes
+      const scale    = Math.sqrt(p) * (0.90 + 0.10*rawPulse); // rocks shrink when depleted
+
+      ctx.save();
+      ctx.translate(r.x, r.y);
+      ctx.rotate(r.angle);
+
+      // Base rock silhouette — dark stone with faint green mineral tinge
+      ctx.fillStyle = this.isRich ? '#182500' : '#0C1A08';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r.rx*scale, r.ry*scale, 0, 0, Math.PI*2);
+      ctx.fill();
+
+      // Upper stone face — slightly lighter, simulates a domed surface
+      ctx.fillStyle = this.isRich ? 'rgba(55,75,8,0.80)' : 'rgba(18,50,14,0.80)';
+      ctx.beginPath();
+      ctx.ellipse(r.rx*0.08*scale, -r.ry*0.20*scale, r.rx*0.72*scale, r.ry*0.58*scale, 0, 0, Math.PI*2);
+      ctx.fill();
+
+      // Inner glow — radial gradient from rock centre outward
+      const grd=ctx.createRadialGradient(0,-r.ry*0.15*scale,0, 0,0, r.rx*1.15*scale);
+      grd.addColorStop(0,   `rgba(${gcR},${gcG},${gcB},${0.72*glow})`);
+      grd.addColorStop(0.45,`rgba(${gcR},${gcG},${gcB},${0.30*glow})`);
+      grd.addColorStop(1,   `rgba(0,0,0,0)`);
+      ctx.fillStyle=grd;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r.rx*1.15*scale, r.ry*1.15*scale, 0, 0, Math.PI*2);
+      ctx.fill();
+
+      // Edge rim — thin bright outline that follows the glow pulse
+      ctx.globalAlpha = 0.25*glow;
+      ctx.strokeStyle=`rgb(${gcR},${gcG},${gcB})`;
+      ctx.lineWidth=0.8;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r.rx*scale, r.ry*scale, 0, 0, Math.PI*2);
+      ctx.stroke();
       ctx.globalAlpha=1;
+
       ctx.restore();
     }
-    ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(this.cx-24,this.cy+this.radius-3,48,4);
-    const barColor = this.isRich ? `rgba(180,${Math.floor(200*p+40)},0,0.9)` : `rgba(0,${Math.floor(200*p+40)},60,0.9)`;
-    ctx.fillStyle=barColor; ctx.fillRect(this.cx-24,this.cy+this.radius-3,48*p,4);
-    // Rich field label
-    if (this.isRich) {
-      ctx.fillStyle='rgba(200,220,0,0.85)'; ctx.font='bold 7px "Courier New"'; ctx.textAlign='center';
+
+    // ── Depletion bar ─────────────────────────────────────────
+    ctx.fillStyle='rgba(0,0,0,0.55)';
+    ctx.fillRect(this.cx-24,this.cy+this.radius-3,48,4);
+    const barCol = this.isRich
+      ? `rgba(160,${Math.floor(180*p+40)},0,0.9)`
+      : `rgba(0,${Math.floor(190*p+40)},55,0.9)`;
+    ctx.fillStyle=barCol;
+    ctx.fillRect(this.cx-24,this.cy+this.radius-3,48*p,4);
+
+    // Rich field badge
+    if(this.isRich){
+      ctx.fillStyle='rgba(190,210,0,0.82)'; ctx.font='bold 7px "Courier New"'; ctx.textAlign='center';
       ctx.fillText('★RICH', this.cx, this.cy+this.radius+10); ctx.textAlign='left';
     }
   }
@@ -933,14 +986,15 @@ export class Unit extends Entity {
     if(this._flash>0) this._flash-=dt;
     if(this._suppressTimer>0) this._suppressTimer-=dt;
 
-    // Entrench: accumulate still-timer when fully idle (no orders, not retreating)
+    // Entrench: accumulate still-timer when not moving (atkTarget alone doesn't break it)
     if(this.canEntrench){
-      const isIdle=!this.moveTarget&&!this.atkTarget&&!this.retreating;
+      const isIdle=!this.moveTarget&&!this.retreating;
       if(isIdle){
         this._stillTimer+=dt;
         if(this._stillTimer>=this.ENTRENCH_TIME) this.entrenched=true;
       } else {
-        if(this.entrenched){ this.entrenched=false; }
+        // Only a move order or retreat exits the trench
+        this.entrenched=false;
         this._stillTimer=0;
       }
     }
@@ -951,11 +1005,19 @@ export class Unit extends Entity {
       if(!this.atkTarget.isAlive()){this.atkTarget=null;return;}
       const d=hypot(this.x,this.y,this.atkTarget.cx,this.atkTarget.cy);
       const rng=this.atkRange*(this._game?.terrain.rangeMult(this.x,this.y)??1);
-      if(d>rng){ this._towards(this.atkTarget.cx,this.atkTarget.cy,dt); }
-      else if(this.atkCd<=0){
+      if(d>rng){
+        if(this.entrenched){ this.atkTarget=null; }  // entrenched: fire-in-place only
+        else { this._towards(this.atkTarget.cx,this.atkTarget.cy,dt); }
+      } else if(this.atkCd<=0){
         const p=this._makeProjectile(this.atkTarget);
         projectiles.push(p);
         this.atkCd=1/this.atkRate; this._flash=0.07;
+        // Weapon sound — heavy for tanks/ATGs, small-arms for infantry
+        if ((this as any).isTank || this instanceof Tank || this instanceof HeavyTank || this instanceof AntitankGun) {
+          sound.tankFire();
+        } else {
+          sound.unitFire();
+        }
       }
     } else if(this.moveTarget){
       const d=hypot(this.x,this.y,this.moveTarget.x,this.moveTarget.y);
@@ -1425,7 +1487,7 @@ export class Artillery extends Unit {
   constructor(x:number,y:number,team:Team='player'){
     super(x,y,team);
     this.radius=14; this.speed=18; this.hp=this.maxHp=180;
-    this.atkDmg=85; this.atkRange=280; this.atkRate=0.35;
+    this.atkDmg=85; this.atkRange=280; this.atkRate=0.20;
     this.autoAtkRange=300; this.projColor=team==='player'?'#FFEE00':'#FF6600';
   }
 
@@ -1464,6 +1526,7 @@ export class Artillery extends Unit {
         p.splash=50;
         projectiles.push(p);
         this.atkCd=1/this.atkRate; this._flash=0.06;
+        sound.artilleryFire();
       }
     }
 

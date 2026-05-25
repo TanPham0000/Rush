@@ -228,8 +228,8 @@ export const MAPS: MapDef[] = [
       { cx: 900,  cy: 600,  label: 'CITY CENTER',    income: 7, isCenter: true  },
       { cx: 1350, cy: 950,  label: 'SOUTH PLAZA',    income: 5, isCenter: false },
       { cx: 920,  cy: 280,  label: 'BLACK MARKET',   income: 0, isCenter: false, isBlackMarket: true },
-      // Engineer Depot — near player base, passive income
-      { cx: 320,  cy: 900,  label: 'ENGINEER DEPOT', income: 4, isCenter: false, isEngineer: true },
+      // Engineer Depot — mid-south urban area, must fight to hold it
+      { cx: 680,  cy: 820,  label: 'ENGINEER DEPOT', income: 3, isCenter: false, isEngineer: true },
     ],
     tibFields: [
       [260,180],[300,1020],[680,420],[700,800],
@@ -239,7 +239,7 @@ export const MAPS: MapDef[] = [
     objectives: [
       'PRIMARY — Destroy the enemy Construction Yard',
       'OR hold City Center for 120 seconds',
-      'Capture ENGINEER DEPOT near your base for bonus income',
+      'Capture ENGINEER DEPOT (mid-south) — repairs nearby vehicles',
     ],
   },
 
@@ -250,7 +250,7 @@ export const MAPS: MapDef[] = [
     subtitle: 'HOLD THE SHORELINE',
     description: 'Amphibious assault from the deep blue. Wave after wave crashes against your beachhead. Capture income nodes to fund your defence and hold the shoreline for 15 minutes — or be swept into the sea.',
     theme: 3,
-    startCredits: 2500,
+    startCredits: 1200,
     waveScale:    1.0,
     enemyHpScale: 1.0,
     playerBase:   { cx: 200, cy: 600 },
@@ -259,20 +259,20 @@ export const MAPS: MapDef[] = [
       // Radar + beach gun (existing)
       { cx: 720,  cy: 220,  label: 'RADAR TOWER',    income: 0, isCenter: false, isRadar:    true },
       { cx: 1260, cy: 960,  label: 'BEACH GUN',      income: 0, isCenter: false, isBeachGun: true },
-      // Passive income nodes — forward positions to fund defence
-      { cx: 560,  cy: 120,  label: 'NORTH SUPPLY',   income: 5, isCenter: false },
-      { cx: 680,  cy: 600,  label: 'COMMAND POST',   income: 6, isCenter: false },
-      { cx: 560,  cy: 1080, label: 'SOUTH SUPPLY',   income: 5, isCenter: false },
-      // Engineer depot near player base
-      { cx: 300,  cy: 350,  label: 'ENGINEER DEPOT', income: 3, isCenter: false, isEngineer: true },
+      // Passive income — fight for these to keep your economy going
+      { cx: 560,  cy: 120,  label: 'NORTH SUPPLY',   income: 3, isCenter: false },
+      { cx: 680,  cy: 600,  label: 'COMMAND POST',   income: 4, isCenter: false },
+      { cx: 560,  cy: 1080, label: 'SOUTH SUPPLY',   income: 3, isCenter: false },
+      // Engineer Depot — forward mid-beach, waves will contest it
+      { cx: 700,  cy: 420,  label: 'ENGINEER DEPOT', income: 2, isCenter: false, isEngineer: true },
     ],
     tibFields: [
-      // Original six
-      [300, 280], [300, 920], [560, 200], [560, 1000], [820, 420], [820, 780],
-      // Extra eco fields — forward of the beach
-      [680, 340], [680, 860], [440, 540], [440, 680],
-      // Rear area income
-      [160, 200], [160, 400], [160, 800], [160, 1000],
+      // Near-base fields (always accessible)
+      [300, 280], [300, 920], [160, 400], [160, 800],
+      // Mid-field (requires holding COMMAND POST area)
+      [560, 200], [560, 1000], [680, 340], [680, 860],
+      // Forward — high risk, high reward
+      [820, 420], [820, 780],
     ].map(([cx,cy]) => ({ cx, cy })),
     mode:             'survival',
     survivalDuration: 900,

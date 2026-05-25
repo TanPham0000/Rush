@@ -120,6 +120,7 @@ export class Engine {
 
   // Survival mode
   _survivalWaveTimer: number=60;   // seconds until next beach wave
+  _lastDitchSent:     boolean=false; // minute-14 final assault flag
 
   // Special capture node state
   _radarActive: boolean=false;     // full-map fog reveal
@@ -173,7 +174,7 @@ export class Engine {
     this._blackMarketAbilities=['Artillery Strike','Reinforcements','EMP Burst'];
     this._artilleryTarget=null;
     this._statsTimer=0; this._statsSnaps=[];
-    this._radarActive=false; this._beachGunId=null;
+    this._radarActive=false; this._beachGunId=null; this._lastDitchSent=false;
     // ── Eco AI state reset ────────────────────────────────────
     this._eCredits=400; this._eBuildTimer=3;
     this._eNextInfantry=9999; this._eNextTank=9999; this._eNoHarvTimer=0;
@@ -837,6 +838,10 @@ export class Engine {
     this._credits+=10*dt;
     for(const n of this.captureNodes){if(n.team==='player'&&!n.isBlackMarket)this._credits+=n.income*dt;}
 
+    // Production hum — plays while any player building is under construction or units are queued
+    if(this.buildings.some(b=>b.team==='player'&&!b.isReady)||[...this._queues.values()].some(q=>q.length>0))
+      sound.productionHum();
+
     // FX
     this._particles.forEach(p=>{p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt;});
     this._particles=this._particles.filter(p=>p.life>0);
@@ -879,7 +884,9 @@ export class Engine {
     // Auto-attack player units
     for(const u of this.pUnits){
       if(!u.retreating&&u.autoAtk&&!u.atkTarget&&!u.moveTarget&&!u.guardPos){
-        let best:Unit|null=null,bestD=u.autoAtkRange;
+        // Entrenched units only engage enemies that are already in atkRange
+        const scanR = u.entrenched ? u.atkRange : u.autoAtkRange;
+        let best:Unit|null=null,bestD=scanR;
         for(const e of this.eUnits){
           if(!e.isAlive())continue;
           const d=hypot(u.x,u.y,e.cx,e.cy);
@@ -904,7 +911,7 @@ export class Engine {
       if((b as any)._justCompleted){
         (b as any)._justCompleted=false;
         if(b.team==='player'){
-          sound.buildPlace();
+          sound.buildComplete();
           this._recalcPower();
           this._flashMsgs.push({text:`${b.type} READY`,x:b.cx,y:b.y-16,t:2,maxT:2,color:C.allyLight});
         } else if(b.team==='enemy'){
@@ -955,6 +962,23 @@ export class Engine {
         sound.captureNode();
         this.setStatus('BEACH GUN online — coastal cannon active!','success');
         this._flashMsgs.push({text:'BEACH GUN!',x:n.cx,y:n.cy-60,t:3,maxT:3,color:C.enemyAccent});
+      }
+
+      // ── Engineer Depot — repair nearby player vehicles ────────
+      if(n.isEngineer&&n.team==='player'){
+        const REPAIR_RADIUS=150, REPAIR_RATE=14; // 14 HP/s within 150px
+        for(const u of this.pUnits){
+          if(!u.isAlive()||u.hp>=u.maxHp)continue;
+          // Only vehicles (not infantry)
+          if(!(u instanceof Tank||u instanceof HeavyTank||u instanceof Artillery||
+               u instanceof AntitankGun||u instanceof Harvester||u instanceof Scout))continue;
+          if(hypot(u.x,u.y,n.cx,n.cy)>REPAIR_RADIUS)continue;
+          u.hp=Math.min(u.maxHp,u.hp+REPAIR_RATE*dt);
+          // Staggered green repair particle — fires once per ~2s per unit
+          if(Math.floor((this._gameTime+u.id*0.41)%2)<dt*2){
+            this._particles.push({x:u.x+rnd(-5,5),y:u.y-14,vx:0,vy:-22,life:0.9,maxLife:0.9,color:'#33FF88',r:3});
+          }
+        }
       }
     }
 
@@ -1040,6 +1064,18 @@ export class Engine {
         waveIncoming.set(true);
         this.setStatus(`WAVE ${this._waveLabel} — ASSAULT INCOMING!`, 'error');
         setTimeout(() => waveIncoming.set(false), 3000);
+      }
+
+      // ── MINUTE 14 LAST-DITCH ASSAULT ─────────────────────
+      if (!this._lastDitchSent && this._gameTime >= 840) {
+        this._lastDitchSent = true;
+        // Massive final push — 60 infantry + 15 tanks spread across the beach
+        this._spawnWave({ infantry: 60, tanks: 15 });
+        waveIncoming.set(true);
+        sound.waveAlert();
+        this.setStatus('⚠ FINAL ASSAULT — ALL FORCES INCOMING!', 'error');
+        this._flashMsgs.push({ text: 'FINAL ASSAULT!', x: MAP_W / 2, y: MAP_H / 2 - 60, t: 4, maxT: 4, color: '#FF2200' });
+        setTimeout(() => waveIncoming.set(false), 5000);
       }
     } else if (this._mapDef.enemyEco) {
       // Eco AI maps: enemy builds base & trains units — handled each frame
@@ -1371,6 +1407,27 @@ export class Engine {
     }
 
     for(const n of this.captureNodes) n.draw(ctx,t);
+
+    // ── Engineer Depot repair-radius aura ─────────────────────
+    for(const n of this.captureNodes){
+      if(!n.isEngineer||n.team!=='player')continue;
+      const pulse=0.5+0.5*Math.sin(t*2.8);
+      // Soft filled circle
+      ctx.globalAlpha=0.06+0.04*pulse;
+      ctx.fillStyle='#33FF88';
+      ctx.beginPath(); ctx.arc(n.cx,n.cy,150,0,Math.PI*2); ctx.fill();
+      // Dashed ring
+      ctx.globalAlpha=0.30+0.18*pulse;
+      ctx.strokeStyle='#33FF88'; ctx.lineWidth=1.2/zoom;
+      ctx.setLineDash([5/zoom,8/zoom]);
+      ctx.beginPath(); ctx.arc(n.cx,n.cy,150,0,Math.PI*2); ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha=1;
+      // Label
+      ctx.globalAlpha=0.70; ctx.fillStyle='#33FF88';
+      ctx.font=`bold ${7/zoom}px "Courier New"`; ctx.textAlign='center';
+      ctx.fillText('REPAIR ZONE',n.cx,n.cy+164); ctx.textAlign='left'; ctx.globalAlpha=1;
+    }
+
     for(const f of this.tibFields) f.draw(ctx,t);
 
     for(const u of this.pUnits){

@@ -6,78 +6,127 @@ A browser-based real-time strategy game built with SvelteKit and HTML5 Canvas. N
 
 ## Overview
 
-RUSH is a single-player RTS with a Command and Conquer feel. You build a base, harvest Tiberium for income, train units, and fight through waves of enemy forces. It runs entirely in the browser with no server required.
+RUSH is a single-player RTS with a Command & Conquer feel. You build a base, harvest Tiberium for income, train units, and fight through waves of enemy forces. It runs entirely in the browser with no server required.
 
-Three standard skirmish maps and one survival map are included. Skirmish maps task you with destroying the enemy War Factory. The Beach Defence map is a 15-minute survival scenario where you hold a coastal position against escalating landing waves.
+Six maps are included across two modes. Skirmish and campaign maps task you with destroying the enemy base or holding a key objective. Operation Whale is a 15-minute survival scenario where you hold a beachhead against escalating amphibious waves — including a desperate last-ditch assault at minute 14.
 
 ---
 
 ## Features
 
 ### Base Building
-- Place buildings within the power grid: every Construction Yard and Power Plant projects a build radius. You must chain Power Plants outward to expand your base footprint.
-- Buildings take time to construct and are non-functional until complete. A scaffold animation and progress bar show the build state.
-- Power Plants generate power. Power-hungry buildings (Barracks, Refinery, Turrets, Tech Lab) draw from the grid. If supply falls short, turrets go offline.
+- Place buildings within your power grid. Every Construction Yard and Power Plant projects a build radius — chain Power Plants outward to expand your footprint.
+- Buildings take time to construct and are non-functional until complete. A scaffold animation and progress bar show build state.
+- Power Plants generate power. Power-hungry structures draw from the grid. If supply runs short, turrets go offline.
 - Each Refinery automatically spawns a Harvester on placement.
 
 ### Economy
-- Harvesters automatically seek Tiberium fields, collect cargo, and return to the Refinery.
-- Tiberium fields deplete over time and can be exhausted.
-- Income rate scales with how many Refineries you have operational.
-- Capture nodes around the map provide bonus income per second when held.
+- Harvesters automatically seek Tiberium fields, collect cargo (up to 250¢ per trip), and return to the **nearest** Refinery.
+- **Rich Tiberium fields** (30% chance, golden-green glow) carry 3,500–5,500¢. Standard fields carry 1,500–2,800¢.
+- Tiberium fields are rendered as glowing rocks that slowly pulse — rich fields pulse warm amber-green, standard fields a cooler green.
+- Fields deplete over time and can be exhausted.
+- Capture nodes around each map provide passive income per second.
 
 ### Units
-All units are drawn as canvas art in local rotated space so they face their movement direction.
 
-| Unit | Role |
-|---|---|
-| Infantry | General purpose. Weak against armour. |
-| Grenadier | Infantry with splash grenades. Upgraded from Barracks via Tech Lab. |
-| Tank | Core armour unit. Strong against infantry and artillery. |
-| Heavy Tank | Upgraded tank. Dominates infantry, holds against other armour. Requires Tech Lab upgrade. |
-| Artillery | Long-range siege unit. Must deploy before firing. Devastating against buildings and clusters. |
-| Scout | Fast harassment unit. Excellent against artillery, near-useless against armour. Provides vision radius. |
-| Anti-Tank Gun | Specialist armour-killer. Weak against infantry. Requires Tech Lab upgrade. |
-| Harvester | Economic unit. Collects Tiberium. Respects manual move commands. |
+All units face their movement direction and are rendered as canvas art in local rotated space.
+
+| Unit | Cost | Train | Role |
+|---|---|---|---|
+| Infantry | 100¢ | 8s | General purpose. Weak against armour. |
+| Grenadier | 100¢ | 11s | Splash grenades. Upgraded from Barracks via Tech Lab. |
+| Marksman | 175¢ | 14s | Long-range precision. Devastates infantry, weak against armour. Requires Tech Lab. |
+| Tank | 400¢ | 20s | Core armour. Strong against infantry. |
+| Heavy Tank | 400¢ | 26s | Upgraded tank — +60% HP, +30% dmg. Requires Tech Lab upgrade. |
+| Artillery | 550¢ | 28s | Long-range siege. Devastating against buildings and clusters. Slow to reload. Requires Tech Lab. |
+| Scout | 80¢ | 5s | Fast harassment. Extends vision radius. Poor against armour. |
+| Anti-Tank Gun | 280¢ | 18s | Specialist armour-killer. Weak against infantry. Requires Tech Lab. |
+| Harvester | 300¢ | 13s | Economic unit. Collects Tiberium from the nearest available field. |
 
 ### Damage System
-A soft rock-paper-scissors matrix governs unit effectiveness. Damage multipliers are applied per target type — tanks shred infantry, artillery siege buildings, scouts harass artillery, anti-tank guns devastate armour. No unit type is universally dominant.
+A soft rock-paper-scissors matrix governs effectiveness. Damage multipliers apply per target class — tanks shred infantry, artillery punishes clusters and buildings, scouts harass artillery, anti-tank guns devastate armour. No unit type is universally dominant.
 
 ### Turrets
-Standard turrets can be individually upgraded after a Tech Lab is built:
-- Anti-Infantry: dual autocannons, high fire rate, greatly reduced damage against armour.
-- Anti-Tank: heavy cannon, slow rate of fire, high damage multiplier against armour.
+Turrets can be individually upgraded after a Tech Lab is built:
 
-Upgrading costs 250 or 350 credits respectively and cannot be reversed.
+| Upgrade | Cost | Effect |
+|---|---|---|
+| Anti-Infantry | 250¢ | Dual autocannons. High fire rate, greatly reduced damage against armour. |
+| Anti-Tank | 350¢ | Heavy cannon. Slow fire rate, high damage multiplier against armour. |
+| Artillery | 500¢ | Siege cannon. Extreme range and splash, very slow reload. |
+
+Upgrades are permanent and cannot be reversed.
+
+### Armoury
+Build an Armoury (requires Barracks) to access infantry-wide upgrade research:
+
+| Upgrade | Cost | Effect |
+|---|---|---|
+| Reinforced Armour | 350¢ | +20% HP to all infantry |
+| Incendiary Rounds | 350¢ | +20% damage to all infantry |
+| Quick March | 280¢ | +15% speed to all infantry |
+| Entrench | 400¢ | Infantry dig in after 8 seconds idle (+40% damage reduction) |
+
+All researched upgrades apply retroactively to existing infantry and to all future spawns.
+
+### Entrench
+Once the Entrench upgrade is researched, infantry automatically dig a trench after standing still for 8 seconds. While entrenched:
+- They take 40% less damage from all sources.
+- They will **fire in place** at enemies within attack range rather than advancing.
+- Enemies out of range are dropped — entrenched units never chase a target.
+- Moving, retreating, or receiving a new move order breaks the trench immediately.
+
+### Engineer Depot
+Capture nodes marked **ENGINEER DEPOT** project a 150px repair zone. While held by the player, all vehicles in range (Tanks, Heavy Tanks, Artillery, Scout, Anti-Tank Guns, Harvesters) are repaired at 14 HP/s. A pulsing green ring and **REPAIR ZONE** label mark the aura. Green particles animate on vehicles being healed.
 
 ### Fog of War
-All unexplored terrain is hidden. Explored areas show a dimmer memory state. Scouts extend the vision radius of your forces. Capturing the Radar Tower (Beach Defence map) reveals the entire map for as long as you hold it.
+All unexplored terrain is hidden. Explored areas show a dimmer memory state. Scouts extend vision radius. Holding a Radar node reveals the entire map for as long as it is held.
 
 ### Capture Nodes
-Neutral nodes around each map can be captured by moving infantry onto them. Nodes provide income, and some have special effects:
+Neutral nodes can be captured by moving infantry onto them. Node types:
 
-- Standard node: passive income.
-- Center node (skirmish): counts toward the hold-to-win condition.
-- Black Market node: unlocks three one-time special abilities.
-- Radar Tower (Beach Defence): grants full-map vision while held.
-- Beach Gun (Beach Defence): spawns a powerful long-range defensive turret.
+| Type | Effect |
+|---|---|
+| Standard | Passive income per second. |
+| Center Node | Counts toward the hold-to-win condition (120 seconds). |
+| Black Market | Unlocks three one-time special abilities. |
+| Radar Tower | Grants full-map vision while held. |
+| Beach Gun | Spawns a powerful long-range defensive turret. |
+| Engineer Depot | Repairs nearby vehicles at 14 HP/s while held. |
+
+### Black Market
+Capturing a Black Market node unlocks three one-time special abilities usable from the sidebar:
+
+- **Airstrike** — Calls a strafing run on a targeted area.
+- **EMP Pulse** — Temporarily disables all enemy units in a radius.
+- **Supply Drop** — Delivers bonus credits to your account.
 
 ### Campaign and Skirmish
-- Skirmish: play any single map against the AI.
-- Campaign: three maps played in sequence. Winning unlocks the next.
-- Beach Defence: survival mode. Hold for 15 minutes against escalating waves.
+- **Skirmish**: play any single map against the AI.
+- **Campaign**: maps played in sequence. Completing a map unlocks the next.
+- **Operation Whale**: survival mode — hold 15 minutes against escalating waves.
 
 ---
 
 ## Maps
 
-**River Crossing** — Your base is split by a river. Three bridges control all armour movement. The enemy will push all three; you cannot defend everything.
+### River Crossing
+Your base is split by a river. Three bridges control all armour movement. The enemy pushes all three simultaneously — you cannot defend everything. Hold the Control Center for 120 seconds to trigger a collapse, or destroy the War Factory directly.
 
-**Highland** — Open terrain with high ground that slows movement. Flanking is viable in all directions.
+### Highland Assault
+Shattered ridges and dense forest. The enemy digs in on the high ground — push long-range weapons to overlook their compound or flank wide. Marksmen and Artillery excel here. Enemy has active eco. SUMMIT is placed deep in enemy lines.
 
-**City** — Dense urban blocks break line of sight and channel movement. Building footprints are tighter. A fifth enemy turret guards the city centre.
+### Urban Siege
+A ruined city where every street corner is a kill zone. Infantry exploit building cover; tanks are exposed in the open. An **Engineer Depot** sits mid-south — fight to hold it and keep your armour alive. Enemy has active eco. Two win conditions: destroy the enemy Construction Yard, or hold City Center for 120 seconds.
 
-**Beach Defence** (survival) — You wake up to an invasion. Two turrets, scattered infantry, no time to prepare. Waves land from the sea every 30 seconds and grow through the 15 minutes. Capture the Radar Tower for vision and the Beach Gun for extra firepower.
+### Operation Whale *(Survival — 15 minutes)*
+Amphibious assault from the deep blue. Waves land from the sea on a strict schedule, growing through the 15 minutes. At **minute 14** a final all-in assault hits — 60 infantry and 15 tanks in one last-ditch push. Capture income nodes to fund your defence, the Radar Tower for map vision, the Beach Gun for extra firepower, and the **Engineer Depot** in the contested forward zone to keep your vehicles operational. Start credits are limited; every purchase is a decision.
+
+### Dead Man's Pass
+A desert canyon splits the battlefield north to south. The only route through is a passage barely four soldiers wide. Capture both Radar Stations to blind the enemy, then hold The Pass for 120 seconds — or take the grinding alternative of destroying their Construction Yard under cover of canyon walls. Highest wave and HP scaling of the campaign.
+
+### Operation Siege *(Final Map)*
+Final push. The enemy commands from the northeast district, protected by 10 reinforced turrets, a Barracks, and a War Factory. Enemy HP is +50%. The only win condition is destroying their Construction Yard. Capture City Park for income and cover. Capture the Observation Post at the far southeast for full radar. The Black Market is mid-south. Resource-rich but it ends only one way.
 
 ---
 
@@ -86,24 +135,50 @@ Neutral nodes around each map can be captured by moving infantry onto them. Node
 | Building | Cost | Power | Build Time | Notes |
 |---|---|---|---|---|
 | Construction Yard | — | +5 | — | Starting structure. 320px build radius. |
-| Power Plant | 200 | +20 | 22s | Expands build grid by 360px. |
-| Barracks | 300 | -5 | 28s | Trains infantry-class units. |
-| Refinery | 500 | -10 | 32s | Converts Tiberium to credits. Spawns a Harvester. |
-| Turret | 350 | -5 | 16s | Upgradeable to Anti-Infantry or Anti-Tank. |
-| War Factory | 700 | 0 | 40s | Trains armour-class units. |
-| Tech Lab | 600 | -8 | 36s | Unlocks advanced units and turret upgrades. |
+| Power Plant | 200¢ | +20 | 22s | Expands build grid 360px. |
+| Barracks | 300¢ | −5 | 28s | Trains infantry-class units. Required for Armoury. |
+| Refinery | 500¢ | −10 | 32s | Converts Tiberium to credits. Spawns a Harvester on completion. |
+| Turret | 350¢ | −5 | 7s | Upgradeable to Anti-Infantry, Anti-Tank, or Artillery. |
+| War Factory | 700¢ | 0 | 40s | Trains armour-class units. |
+| Tech Lab | 600¢ | −8 | 36s | Unlocks Grenadier, Marksman, Artillery, Anti-Tank Gun, Heavy Tank, and turret upgrades. |
+| Armoury | 450¢ | −6 | 30s | Infantry upgrades: Armour, Damage, Speed, Entrench. Requires Barracks. |
+
+---
+
+## Controls
+
+| Input | Action |
+|---|---|
+| Left click | Select unit / building |
+| Left drag | Box select units |
+| Right click | Move / attack-move |
+| Middle wheel | Zoom |
+| Arrow keys | Pan camera |
+| Mouse edge | Edge scroll |
+| `A` | Attack-move mode |
+| `S` | Stop selected units |
+| `G` | Guard mode |
+| `R` | Retreat selected units |
+| `Escape` | Cancel build placement |
+| `P` | Place Power Plant |
+| `B` | Place Barracks |
+| `F` | Place Refinery |
+| `T` | Place Turret |
+| `K` | Place Tech Lab |
+| `O` | Place Armoury |
 
 ---
 
 ## Tech
 
-- **SvelteKit** with static adapter (output is a plain static site)
+- **SvelteKit** with static adapter — output is a plain static site
 - **Svelte 5** runes mode (`$state`, `$derived`, `$props`)
 - **TypeScript** strict mode throughout
-- **HTML5 Canvas 2D** — all rendering is done manually, no game engine
-- World space: 1800x1200. Viewport: 900x600. Camera pan and zoom supported.
-- Fog of war implemented as a Uint8Array grid (unexplored / explored / visible)
-- Entity-component pattern: Building, Unit, Turret, Harvester, EnemyUnit, CaptureNode, Projectile
+- **HTML5 Canvas 2D** — all rendering is manual, no game engine
+- World space: 1800×1200. Viewport: 900×600. Camera pan and zoom supported.
+- Fog of war: `Uint8Array` grid at 20px cell resolution (unexplored / explored / visible)
+- Entity classes: `Building`, `Unit`, `Turret`, `Harvester`, `EnemyUnit`, `CaptureNode`, `Projectile`, `TiberiumField`
+- Tiberium rocks rendered as layered ellipses with independent phase offsets and a radial gradient glow, slow pulse (~9–11s cycle)
 
 ---
 
@@ -122,7 +197,7 @@ To build for production:
 npm run build
 ```
 
-Output goes to `build/` as a static site. Drop it on any static host (Vercel, Netlify, GitHub Pages).
+Output goes to `build/` as a static site — deploy to Vercel, Netlify, or GitHub Pages.
 
 ---
 
@@ -131,13 +206,14 @@ Output goes to `build/` as a static site. Drop it on any static host (Vercel, Ne
 ```
 src/lib/
   game/
-    engine.ts      — Game loop, input, AI, wave spawning, build system
-    entities.ts    — All entity classes with draw methods
-    terrain.ts     — Map generation and rendering per theme
-    constants.ts   — BDEF, WAVES, UNIT_COST, UPGRADES, map definitions
+    engine.ts      — Game loop, AI, wave spawning, build system, repair logic, black market
+    entities.ts    — All entity classes with draw methods (units, buildings, tiberium, nodes)
+    terrain.ts     — Map generation and rendering per theme (0=rivers 1=hills 2=city 3=beach 4=desert)
+    constants.ts   — BDEF, UPGRADES, ARMOURY_UPGRADES, UNIT_COST, TRAIN_TIME, WAVES, MAPS
     utils.ts       — Canvas helpers, math utilities
   components/
-    Sidebar.svelte — Build panel, train panel, upgrade panel, node HUD
+    GameCanvas.svelte — Canvas, input handling, game loop RAF
+    Sidebar.svelte    — Build panel, train panel, Tech Lab / Armoury upgrade panels, node HUD
   stores/
     gameStore.ts   — Svelte stores bridging engine state to UI
 ```

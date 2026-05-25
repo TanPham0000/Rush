@@ -55,6 +55,45 @@ class SoundSystem {
   buildPlace()    { this._tone(1200, 0.09,'sine',     0.08); this._tone(1600, 0.07,'sine',    0.07, 0.08); }
   unitReady()     { this._tone(880,  0.07,'sine',     0.10); this._tone(1320, 0.06,'sine',    0.09, 0.10); }
   waveAlert()     { this._tone(440,  0.14,'sawtooth', 0.09); this._tone(330,  0.26,'sawtooth',0.10, 0.12); }
+  // ── Throttle cooldowns ────────────────────────────────────
+  private _unitFireCd  = 0;
+  private _tankFireCd  = 0;
+  private _prodHumCd   = 0;
+
+  /** Triumphant chime when a building finishes constructing. */
+  buildComplete() {
+    this._tone(880,  0.09, 'sine', 0.09);
+    this._tone(1100, 0.09, 'sine', 0.09, 0.09);
+    this._tone(1400, 0.13, 'sine', 0.10, 0.18);
+  }
+
+  /** Small-arms crack — globally throttled to ~5/sec so it stays ambient. */
+  unitFire() {
+    const now = Date.now();
+    if (now - this._unitFireCd < 200) return;
+    this._unitFireCd = now;
+    this._noise(0.05, 0.055);
+    this._tone(480, 0.03, 'square', 0.030, 0.01);
+  }
+
+  /** Heavy-weapon thud — throttled to ~2/sec so overlapping shots merge. */
+  tankFire() {
+    const now = Date.now();
+    if (now - this._tankFireCd < 450) return;
+    this._tankFireCd = now;
+    this._noise(0.14, 0.085);
+    this._tone(88, 0.26, 'sawtooth', 0.075, 0.05);
+  }
+
+  /** Low mechanical hum — throttled to every ~2.5 s, plays while anything is producing. */
+  productionHum() {
+    const now = Date.now();
+    if (now - this._prodHumCd < 2400) return;
+    this._prodHumCd = now;
+    this._tone(110, 0.35, 'sine', 0.028);
+    this._tone(130, 0.25, 'sine', 0.018, 0.12);
+  }
+
   private _lowPowerCd = 0;
   lowPower()      {
     const now = Date.now();
