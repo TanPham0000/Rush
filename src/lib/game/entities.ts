@@ -732,7 +732,7 @@ export class Projectile {
 export class Unit extends Entity {
   x:number;y:number;
   radius:  number=8;
-  speed:   number=65;   // base infantry speed (reduced from 85)
+  speed:   number=50;   // base infantry speed
   angle:   number=0;
   _flash:  number=0;
   _speedMult: number=1;  // power / suppress modifier
@@ -989,7 +989,7 @@ export class Grenadier extends Unit {
   constructor(x:number,y:number,team:Team='player'){
     super(x,y,team);
     this.hp=this.maxHp=110; this.atkDmg=18; this.atkRange=70; this.atkRate=0.9;
-    this.autoAtkRange=150; this.speed=60;
+    this.autoAtkRange=150; this.speed=46;
     this.projColor=team==='player'?'#FF8800':'#FF6600';
   }
 
@@ -1036,7 +1036,7 @@ export class Tank extends Unit {
 
   constructor(x:number,y:number,team:Team='player'){
     super(x,y,team);
-    this.radius=12; this.speed=32; this.hp=this.maxHp=320;
+    this.radius=12; this.speed=26; this.hp=this.maxHp=320;
     this.atkDmg=46; this.atkRange=100; this.atkRate=0.65;
     this.projColor=team==='player'?'#FFDD44':'#FF8800';
     this.autoAtkRange=180;
@@ -1120,7 +1120,7 @@ export class Tank extends Unit {
 export class HeavyTank extends Tank {
   constructor(x:number,y:number,team:Team='player'){
     super(x,y,team);
-    this.radius=15; this.speed=26;
+    this.radius=15; this.speed=21;
     this.hp=this.maxHp=500; this.atkDmg=60; this.atkRate=0.55;
     this.projColor=team==='player'?'#00AAFF':'#FF4400';
   }
@@ -1213,7 +1213,7 @@ export class Artillery extends Unit {
 
   constructor(x:number,y:number,team:Team='player'){
     super(x,y,team);
-    this.radius=14; this.speed=30; this.hp=this.maxHp=180;
+    this.radius=14; this.speed=22; this.hp=this.maxHp=180;
     this.atkDmg=85; this.atkRange=280; this.atkRate=0.35;
     this.autoAtkRange=300; this.projColor=team==='player'?'#FFEE00':'#FF6600';
   }
@@ -1355,7 +1355,7 @@ export class Scout extends Unit {
 
   constructor(x:number,y:number,team:Team='player'){
     super(x,y,team);
-    this.radius=6; this.speed=135; this.hp=this.maxHp=45;
+    this.radius=6; this.speed=105; this.hp=this.maxHp=45;
     this.atkDmg=8; this.atkRange=55; this.atkRate=1.8;
     this.autoAtkRange=120;
     this.projColor=team==='player'?'#00FFCC':'#FF8844';
@@ -1438,7 +1438,7 @@ export class AntitankGun extends Unit {
 
   constructor(x:number,y:number,team:Team='player'){
     super(x,y,team);
-    this.radius=10; this.speed=42; this.hp=this.maxHp=140;
+    this.radius=10; this.speed=34; this.hp=this.maxHp=140;
     this.atkDmg=72; this.atkRange=120; this.atkRate=0.7;
     this.autoAtkRange=160;
     this.projColor=team==='player'?'#FF4400':'#FF8800';
@@ -1536,7 +1536,7 @@ export class Harvester extends Unit {
 
   constructor(x:number,y:number,game:GameRef,team:Team='player'){
     super(x,y,team);
-    this._game=game; this.radius=10; this.speed=62;
+    this._game=game; this.radius=10; this.speed=50;
     this.hp=this.maxHp=200; this.autoAtk=false;
   }
 
@@ -1664,14 +1664,14 @@ export class EnemyUnit extends Unit {
 
   constructor(x:number,y:number,opts:EnemyOpts={}){
     super(x,y,'enemy');
-    this.speed=opts.speed??40; this.atkDmg=opts.dmg??11; this.atkRate=opts.rate??1.0;
+    this.speed=opts.speed??32; this.atkDmg=opts.dmg??11; this.atkRate=opts.rate??1.0;
     this.atkRange=opts.range??56; this.hp=this.maxHp=opts.hp??100;
     this.radius=opts.radius??8; this.isTank=opts.tank??false; this.isHeavy=opts.heavy??false;
     this.aggroRange=opts.aggro??240; this.projColor=this.isTank?C.enemyLight:C.enemyAccent;
     this.autoAtk=false; this._pauseTimer=rnd(0.5,1.5);
     this._homeX=x; this._homeY=y;
     if(this.isTank){
-      this.radius=12; this.speed=32;
+      this.radius=12; this.speed=25;
       this.hp=this.maxHp=this.isHeavy?500:320;
       this.atkDmg=this.isHeavy?60:46; this.atkRange=100; this.atkRate=this.isHeavy?0.55:0.65;
       this.autoAtkRange=180;
@@ -1714,6 +1714,19 @@ export class EnemyUnit extends Unit {
         let best=bridges[0],bestD=Infinity;
         for(const b of bridges){const d=hypot(this.x,this.y,b.x,b.y)+rnd(-40,40);if(d<bestD){bestD=d;best=b;}}
         return best;
+      }
+    }
+    // Desert canyon navigation (theme 4 — Dead Man's Pass)
+    // Units outside the corridor must route through the canyon entrance first
+    if(this.mapTheme===4){
+      const CORRIDOR_Y_N=375, CORRIDOR_Y_S=825; // corridor north/south thresholds
+      if(this.y<CORRIDOR_Y_N){
+        // North of corridor entrance — route to canyon mouth
+        return{x:900+rnd(-20,20),y:CORRIDOR_Y_N};
+      }
+      if(this.y>CORRIDOR_Y_S){
+        // South of corridor entrance — route to canyon mouth (for player units going north)
+        return{x:900+rnd(-20,20),y:CORRIDOR_Y_S};
       }
     }
     return{x:goal.cx,y:goal.cy};

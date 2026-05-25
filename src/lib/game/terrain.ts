@@ -36,10 +36,11 @@ export class TerrainMap {
   }
 
   private _initLayout() {
-    if (this.theme === 0) this._initRivers();
+    if      (this.theme === 0) this._initRivers();
     else if (this.theme === 1) this._initHills();
     else if (this.theme === 2) this._initCity();
-    else this._initBeach();
+    else if (this.theme === 3) this._initBeach();
+    else                       this._initDesert();
   }
 
   // ── RIVERS layout ──────────────────────────────────────
@@ -132,11 +133,28 @@ export class TerrainMap {
     }
   }
 
+  private _initDesert() {
+    // Sparse rock outcroppings in base areas and corridor edges
+    (this.rocks as RockCluster[]).push(
+      { cx:  680, cy:  180, r: 26 }, { cx: 1120, cy:  220, r: 22 },
+      { cx:  730, cy: 1020, r: 24 }, { cx: 1070, cy:  980, r: 22 },
+      { cx:  900, cy:  520, r: 18 }, { cx:  900, cy:  680, r: 18 },
+      { cx:  760, cy:  100, r: 20 }, { cx: 1040, cy:  100, r: 20 },
+      { cx:  760, cy: 1100, r: 20 }, { cx: 1040, cy: 1100, r: 20 },
+    );
+    // Sand dune mounds in base areas for cover
+    (this.highGround as HighGround[]).push(
+      { x: 580, y:  60, w: 180, h: 110 }, { x: 1020, y:  80, w: 160, h: 100 },
+      { x: 580, y: 980, w: 180, h: 110 }, { x: 1020, y:1000, w: 160, h: 100 },
+    );
+  }
+
   private _render() {
-    if (this.theme === 0) this._renderRivers();
+    if      (this.theme === 0) this._renderRivers();
     else if (this.theme === 1) this._renderHills();
     else if (this.theme === 2) this._renderCity();
-    else this._renderBeach();
+    else if (this.theme === 3) this._renderBeach();
+    else                       this._renderDesert();
   }
 
   // ══════════════════════════════════════════════════════════
@@ -545,46 +563,133 @@ export class TerrainMap {
     c.fillText('OCEAN', MAP_W-75, MAP_H/2+8); c.textAlign='left';
   }
 
-  // ── Cliff zone renderer ──────────────────────────────────
+  // ══════════════════════════════════════════════════════════
+  // THEME 4 — DESERT CANYON
+  // ══════════════════════════════════════════════════════════
+  private _renderDesert() {
+    const c = this._off.getContext('2d')!;
+
+    // Sandy desert floor — warm golden gradient
+    const bgGrad = c.createLinearGradient(0, 0, MAP_W, MAP_H);
+    bgGrad.addColorStop(0,    '#D8C870');
+    bgGrad.addColorStop(0.25, '#CCB860');
+    bgGrad.addColorStop(0.55, '#C4AE58');
+    bgGrad.addColorStop(0.8,  '#CCBA62');
+    bgGrad.addColorStop(1,    '#D4C468');
+    c.fillStyle = bgGrad; c.fillRect(0, 0, MAP_W, MAP_H);
+
+    // Sand ripple texture across entire floor
+    c.strokeStyle = 'rgba(180,160,60,0.14)'; c.lineWidth = 1;
+    for (let y = 0; y < MAP_H; y += 14) {
+      c.beginPath(); c.moveTo(0, y);
+      for (let x = 0; x < MAP_W; x += 32) {
+        c.quadraticCurveTo(x+16, y + Math.sin(x*0.025+y*0.012)*5, x+32, y);
+      }
+      c.stroke();
+    }
+
+    // Grid (very subtle on sand)
+    c.strokeStyle = 'rgba(180,150,50,0.07)'; c.lineWidth = 0.5;
+    for (let x = 0; x < MAP_W; x += GRID) { c.beginPath(); c.moveTo(x,0); c.lineTo(x,MAP_H); c.stroke(); }
+    for (let y = 0; y < MAP_H; y += GRID) { c.beginPath(); c.moveTo(0,y); c.lineTo(MAP_W,y); c.stroke(); }
+
+    // Sand dune mounds (high ground cover)
+    for (const h of this.highGround) {
+      const dcx = h.x+h.w/2, dcy = h.y+h.h/2;
+      const dg = c.createRadialGradient(dcx, dcy-8, 0, dcx, dcy, Math.max(h.w,h.h)*0.72);
+      dg.addColorStop(0,   '#E8D878'); dg.addColorStop(0.45, C.beachSand);
+      dg.addColorStop(0.8, '#B8A458'); dg.addColorStop(1, 'rgba(180,160,70,0)');
+      c.fillStyle = dg;
+      c.beginPath(); c.ellipse(dcx, dcy, h.w*0.6, h.h*0.55, 0, 0, Math.PI*2); c.fill();
+      c.strokeStyle='rgba(160,130,50,0.25)'; c.lineWidth=1.5;
+      c.beginPath(); c.ellipse(dcx, dcy+h.h*0.15, h.w*0.52, h.h*0.2, 0, 0, Math.PI*2); c.stroke();
+      c.fillStyle='rgba(140,110,50,0.5)'; c.font='bold 7px "Courier New"'; c.textAlign='center';
+      c.fillText('DUNE', dcx, dcy+3); c.textAlign='left';
+    }
+
+    // Sandstone rock clusters
+    for (const r of this.rocks) {
+      c.beginPath(); c.ellipse(r.cx+3, r.cy+3, r.r, r.r*0.76, 0, 0, Math.PI*2);
+      c.fillStyle='rgba(0,0,0,0.18)'; c.fill();
+      c.beginPath(); c.arc(r.cx, r.cy, r.r, 0, Math.PI*2);
+      c.fillStyle='#9A7E4A'; c.fill();
+      c.beginPath(); c.arc(r.cx-r.r*0.25, r.cy-r.r*0.25, r.r*0.5, 0, Math.PI*2);
+      c.fillStyle='rgba(160,130,70,0.55)'; c.fill();
+      if (r.r >= 18) {
+        c.fillStyle='rgba(130,100,50,0.65)'; c.font='bold 7px "Courier New"'; c.textAlign='center';
+        c.fillText('COVER', r.cx, r.cy+3); c.textAlign='left';
+      }
+    }
+
+    // Canyon walls (cliffs rendered last, on top)
+    this._renderCliffs(c);
+  }
+
+  // ── Cliff zone renderer (theme-aware) ────────────────────
   private _renderCliffs(c: CanvasRenderingContext2D) {
+    const isDesert = this.theme === 4;
     for (const cz of this.cliffZones) {
-      // Solid dark rock base
-      c.fillStyle = '#0E0C08'; c.fillRect(cz.x, cz.y, cz.w, cz.h);
-      // Layered gradient for depth
-      const cg = c.createLinearGradient(cz.x, cz.y, cz.x + cz.w * 0.6, cz.y + cz.h);
-      cg.addColorStop(0,   '#1A1610');
-      cg.addColorStop(0.4, '#120E08');
-      cg.addColorStop(0.8, '#1C1810');
-      cg.addColorStop(1,   '#0E0C06');
-      c.fillStyle = cg; c.fillRect(cz.x, cz.y, cz.w, cz.h);
-      // Horizontal strata lines (rock layers)
-      c.strokeStyle = 'rgba(60,50,20,0.45)'; c.lineWidth = 1;
-      const step = 22;
-      for (let yi = cz.y + (step / 2); yi < cz.y + cz.h; yi += step) {
-        c.beginPath(); c.moveTo(cz.x, yi);
-        for (let xi = cz.x; xi <= cz.x + cz.w; xi += 16) {
-          c.lineTo(xi, yi + (Math.sin(xi * 0.07 + yi * 0.04) * 3));
+      if (isDesert) {
+        // ── Sandstone canyon walls ─────────────────────────
+        c.fillStyle = '#7A6030'; c.fillRect(cz.x, cz.y, cz.w, cz.h);
+        const cg = c.createLinearGradient(cz.x, cz.y, cz.x + cz.w*0.55, cz.y + cz.h);
+        cg.addColorStop(0,   '#AA8E50'); cg.addColorStop(0.3, '#8E7238');
+        cg.addColorStop(0.7, '#7A6028'); cg.addColorStop(1,   '#9A8040');
+        c.fillStyle = cg; c.fillRect(cz.x, cz.y, cz.w, cz.h);
+        // Sandstone strata
+        c.strokeStyle = 'rgba(180,150,60,0.3)'; c.lineWidth = 1;
+        const step = 18;
+        for (let yi = cz.y + step/2; yi < cz.y + cz.h; yi += step) {
+          c.beginPath(); c.moveTo(cz.x, yi);
+          for (let xi = cz.x; xi <= cz.x+cz.w; xi += 18)
+            c.lineTo(xi, yi + Math.sin(xi*0.065+yi*0.035)*2.5);
+          c.stroke();
         }
-        c.stroke();
-      }
-      // Vertical crack lines
-      c.strokeStyle = 'rgba(0,0,0,0.5)'; c.lineWidth = 1.2;
-      const crackCount = Math.floor(cz.w / 60);
-      for (let i = 0; i < crackCount; i++) {
-        const cx = cz.x + (i + 0.5) * (cz.w / crackCount) + rnd(-20, 20);
-        const cy0 = cz.y + rnd(0, cz.h * 0.3);
-        c.beginPath(); c.moveTo(cx, cy0);
-        c.lineTo(cx + rnd(-12, 12), cy0 + rnd(20, 40));
-        c.lineTo(cx + rnd(-18, 18), cy0 + rnd(50, 80));
-        c.stroke();
-      }
-      // Bright edge highlight (top/left lip — gives 3-D cliff face look)
-      c.strokeStyle = 'rgba(80,70,30,0.55)'; c.lineWidth = 2;
-      c.strokeRect(cz.x, cz.y, cz.w, cz.h);
-      // "CLIFF" label in center of large zones
-      if (cz.w > 120 && cz.h > 80) {
-        c.fillStyle = 'rgba(70,60,25,0.7)'; c.font = 'bold 8px "Courier New"'; c.textAlign = 'center';
-        c.fillText('✕ CLIFF', cz.x + cz.w / 2, cz.y + cz.h / 2 + 4); c.textAlign = 'left';
+        // Cracks (sand-coloured)
+        c.strokeStyle = 'rgba(80,60,20,0.38)'; c.lineWidth = 1;
+        const cc = Math.floor(cz.w / 80);
+        for (let i = 0; i < cc; i++) {
+          const cx2 = cz.x + (i+0.5)*(cz.w/cc) + rnd(-30,30);
+          const cy0 = cz.y + rnd(0, cz.h*0.3);
+          c.beginPath(); c.moveTo(cx2, cy0);
+          c.lineTo(cx2+rnd(-8,8), cy0+rnd(12,28));
+          c.lineTo(cx2+rnd(-12,12), cy0+rnd(35,60)); c.stroke();
+        }
+        c.strokeStyle='rgba(200,170,80,0.4)'; c.lineWidth=2;
+        c.strokeRect(cz.x, cz.y, cz.w, cz.h);
+        if (cz.w > 120 && cz.h > 80) {
+          c.fillStyle='rgba(200,170,80,0.55)'; c.font='bold 8px "Courier New"'; c.textAlign='center';
+          c.fillText('✕ CANYON', cz.x+cz.w/2, cz.y+cz.h/2+4); c.textAlign='left';
+        }
+      } else {
+        // ── Dark volcanic rock cliff ───────────────────────
+        c.fillStyle = '#0E0C08'; c.fillRect(cz.x, cz.y, cz.w, cz.h);
+        const cg = c.createLinearGradient(cz.x, cz.y, cz.x + cz.w*0.6, cz.y + cz.h);
+        cg.addColorStop(0, '#1A1610'); cg.addColorStop(0.4, '#120E08');
+        cg.addColorStop(0.8, '#1C1810'); cg.addColorStop(1, '#0E0C06');
+        c.fillStyle = cg; c.fillRect(cz.x, cz.y, cz.w, cz.h);
+        c.strokeStyle = 'rgba(60,50,20,0.45)'; c.lineWidth = 1;
+        const step2 = 22;
+        for (let yi = cz.y + step2/2; yi < cz.y + cz.h; yi += step2) {
+          c.beginPath(); c.moveTo(cz.x, yi);
+          for (let xi = cz.x; xi <= cz.x+cz.w; xi += 16)
+            c.lineTo(xi, yi + Math.sin(xi*0.07+yi*0.04)*3);
+          c.stroke();
+        }
+        c.strokeStyle='rgba(0,0,0,0.5)'; c.lineWidth=1.2;
+        const cc2 = Math.floor(cz.w/60);
+        for (let i=0; i<cc2; i++) {
+          const cx2=cz.x+(i+0.5)*(cz.w/cc2)+rnd(-20,20), cy0=cz.y+rnd(0,cz.h*0.3);
+          c.beginPath(); c.moveTo(cx2,cy0);
+          c.lineTo(cx2+rnd(-12,12),cy0+rnd(20,40));
+          c.lineTo(cx2+rnd(-18,18),cy0+rnd(50,80)); c.stroke();
+        }
+        c.strokeStyle='rgba(80,70,30,0.55)'; c.lineWidth=2;
+        c.strokeRect(cz.x, cz.y, cz.w, cz.h);
+        if (cz.w > 120 && cz.h > 80) {
+          c.fillStyle='rgba(70,60,25,0.7)'; c.font='bold 8px "Courier New"'; c.textAlign='center';
+          c.fillText('✕ CLIFF', cz.x+cz.w/2, cz.y+cz.h/2+4); c.textAlign='left';
+        }
       }
     }
   }
@@ -643,6 +748,7 @@ export class TerrainMap {
       return nx < 18 || nx > gs-18 || ny < 18 || ny > gs-18;
     }
     if (this.theme === 3) return Math.abs(y-585)<9 && x < 1380;  // coastal road
+    if (this.theme === 4) return false;  // no roads in the canyon
     return false;
   }
 
@@ -666,13 +772,14 @@ export class TerrainMap {
   }
 
   speedMult(x: number, y: number): number {
-    if (this.isImpassable(x, y)) return 0.0;  // full stop in cliffs
+    if (this.isImpassable(x, y)) return 0.0;  // full stop in cliffs / canyon walls
     if (this.onRock(x, y) || this.inCityBlock(x, y)) return 0.28;
     if (this.inRiver(x, y))    return 0.12;
     if (this.onBeachSand(x,y)) return 0.78;  // soft sand
-    if (this.onHighGround(x,y) && this.theme===3) return 0.72; // sand dunes / seawall
+    if (this.onHighGround(x,y) && (this.theme===3||this.theme===4)) return 0.72; // dunes / seawall
     if (this.onRoad(x, y))     return 1.28;
     if (this.inForest(x, y))   return 0.65;
+    if (this.theme === 4)       return 0.88;  // desert sand is slower than grass
     return 1.0;
   }
 

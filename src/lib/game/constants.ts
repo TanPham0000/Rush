@@ -100,7 +100,7 @@ export const ENDLESS_INTERVAL = 38;
 export const HOLD_WIN_TIME = 120;
 
 // ── CAMPAIGN MAP DEFINITIONS ─────────────────────────────────
-export type MapTheme = 0 | 1 | 2 | 3;   // 0=rivers, 1=hills, 2=city, 3=beach
+export type MapTheme = 0 | 1 | 2 | 3 | 4;   // 0=rivers, 1=hills, 2=city, 3=beach, 4=desert
 
 export interface CaptureNodeDef {
   cx: number; cy: number; label: string; income: number;
@@ -132,6 +132,8 @@ export interface MapDef {
   extraEnemyBuildings?: { type: BType; cx: number; cy: number }[]; // pre-placed enemy structures beyond CY
   // ── Terrain ──────────────────────────────────────────────
   impassableZones?: ImpassableZone[];        // hard terrain blocking unit movement
+  // ── Mission briefing ─────────────────────────────────────
+  objectives?:      string[];                // shown in mission briefing overlay
 }
 
 export const MAPS: MapDef[] = [
@@ -157,6 +159,11 @@ export const MAPS: MapDef[] = [
       [440,380],[430,820],[820,320],[830,900],
       [1150,400],[1230,840],[310,600],[1600,600],[560,200],
     ].map(([cx,cy]) => ({ cx, cy })),
+    objectives: [
+      'Destroy the enemy War Factory',
+      'OR hold Control Center for 120 seconds',
+      'Protect your Construction Yard',
+    ],
   },
 
   // ── MAP 1: HIGHLAND ASSAULT ──────────────────────────────
@@ -164,24 +171,30 @@ export const MAPS: MapDef[] = [
     id: 1,
     name: 'HIGHLAND ASSAULT',
     subtitle: 'HIGH GROUND IS EVERYTHING',
-    description: 'Shattered ridges and dense forest. Secure the hilltops — they grant range bonuses that change every engagement.',
+    description: 'Shattered ridges and dense forest. Secure the hilltops — they grant range bonuses that change every engagement. Bases are far apart — speed and economy are everything.',
     theme: 1,
     startCredits: 800,
     waveScale:    1.15,
     enemyHpScale: 1.10,
     enemyEco:     true,
-    playerBase:   { cx: 230, cy: 900 },
-    enemyBase:    { cx: 1600, cy: 300 },
+    playerBase:   { cx: 150, cy: 1050 },
+    enemyBase:    { cx: 1680, cy: 150 },
     captureNodes: [
-      { cx: 450,  cy: 400,  label: 'WEST RIDGE',    income: 5, isCenter: false },
+      { cx: 380,  cy: 300,  label: 'WEST RIDGE',    income: 5, isCenter: false },
       { cx: 900,  cy: 580,  label: 'SUMMIT',         income: 6, isCenter: true  },
-      { cx: 1380, cy: 820,  label: 'EAST RIDGE',    income: 5, isCenter: false },
-      { cx: 1100, cy: 220,  label: 'BLACK MARKET',  income: 0, isCenter: false, isBlackMarket: true },
+      { cx: 1460, cy: 860,  label: 'EAST RIDGE',    income: 5, isCenter: false },
+      { cx: 1150, cy: 200,  label: 'BLACK MARKET',  income: 0, isCenter: false, isBlackMarket: true },
     ],
     tibFields: [
-      [340,780],[380,300],[700,700],[880,200],
-      [1050,900],[1300,560],[1550,700],[550,500],[1100,1050],
+      [240,900],[320,280],[600,780],[900,200],
+      [1080,980],[1380,540],[1620,780],[520,480],[1100,1080],
+      [700,300],[1260,400],[400,600],
     ].map(([cx,cy]) => ({ cx, cy })),
+    objectives: [
+      'Destroy the enemy Construction Yard',
+      'OR hold Summit for 120 seconds',
+      'Build your economy — Refineries win wars',
+    ],
   },
 
   // ── MAP 2: URBAN SIEGE ───────────────────────────────────
@@ -195,26 +208,32 @@ export const MAPS: MapDef[] = [
     waveScale:    1.30,
     enemyHpScale: 1.20,
     enemyEco:     true,
-    playerBase:   { cx: 200, cy: 600 },
-    enemyBase:    { cx: 1650, cy: 600 },
+    playerBase:   { cx: 160, cy: 600 },
+    enemyBase:    { cx: 1700, cy: 600 },
     captureNodes: [
-      { cx: 550,  cy: 300,  label: 'NORTH PLAZA',   income: 5, isCenter: false },
+      { cx: 500,  cy: 250,  label: 'NORTH PLAZA',   income: 5, isCenter: false },
       { cx: 900,  cy: 600,  label: 'CITY CENTER',   income: 7, isCenter: true  },
-      { cx: 1300, cy: 900,  label: 'SOUTH PLAZA',   income: 5, isCenter: false },
-      { cx: 900,  cy: 300,  label: 'BLACK MARKET',  income: 0, isCenter: false, isBlackMarket: true },
+      { cx: 1350, cy: 950,  label: 'SOUTH PLAZA',   income: 5, isCenter: false },
+      { cx: 920,  cy: 280,  label: 'BLACK MARKET',  income: 0, isCenter: false, isBlackMarket: true },
     ],
     tibFields: [
-      [300,200],[350,1000],[700,450],[700,750],
-      [1100,300],[1100,900],[1400,500],[1500,800],[900,1050],
+      [260,180],[300,1020],[680,420],[700,800],
+      [1120,280],[1140,920],[1450,480],[1560,820],[900,1060],
+      [400,500],[1300,350],[1600,400],
     ].map(([cx,cy]) => ({ cx, cy })),
+    objectives: [
+      'Destroy the enemy Construction Yard',
+      'OR hold City Center for 120 seconds',
+      'Street fighting — infantry dominate in buildings',
+    ],
   },
 
-  // ── MAP 3: BEACH DEFENCE ─────────────────────────────────
+  // ── MAP 3: OPERATION WHALE ───────────────────────────────
   {
     id: 3,
-    name: 'BEACH DEFENCE',
-    subtitle: 'HOLD THE LINE',
-    description: 'Amphibious assault from the ocean. Endless waves break against your seawall. Dig in and survive 15 minutes.',
+    name: 'OPERATION WHALE',
+    subtitle: 'HOLD THE SHORELINE',
+    description: 'Amphibious assault from the deep blue. Wave after wave crashes against your beachhead fortifications. Hold the shoreline for 15 minutes — or be swept into the sea.',
     theme: 3,
     startCredits: 2500,
     waveScale:    1.0,
@@ -231,101 +250,132 @@ export const MAPS: MapDef[] = [
     mode:             'survival',
     survivalDuration: 900,
     preBuilt:         true,
+    objectives: [
+      'Survive 15 minutes of amphibious assault',
+      'Defend your Construction Yard at all costs',
+      'Capture Radar Tower for full map vision',
+    ],
   },
 
   // ── MAP 4: DEAD MAN'S PASS ───────────────────────────────
-  // Diagonal layout — player bottom-left, enemy top-right.
-  // Impassable cliff walls funnel both armies through a narrow central valley.
+  // Desert canyon. Player south, enemy north. A single 120px-wide canyon
+  // corridor is the ONLY path between bases. 2 radar stations guard the
+  // pass entrances. Control The Pass to win.
   {
     id: 4,
     name: "DEAD MAN'S PASS",
-    subtitle: 'HOLD THE VALLEY',
-    description: "Two forces converge on a mountain pass. Sheer cliff walls on each flank leave only one route through. The first to hold The Pass controls the war.",
-    theme: 1,
-    startCredits: 750,
+    subtitle: 'HOLD THE CANYON',
+    description: "A desert canyon splits the battlefield north to south. The only route through is a passage barely four soldiers wide. Capture both radar stations to blind the enemy — then hold The Pass.",
+    theme: 4,
+    startCredits: 900,
     waveScale:    1.35,
     enemyHpScale: 1.22,
     enemyEco:     true,
-    playerBase:   { cx: 230, cy: 980 },
-    enemyBase:    { cx: 1570, cy: 220 },
+    playerBase:   { cx: 900, cy: 1020 },
+    enemyBase:    { cx: 900, cy: 180  },
     captureNodes: [
-      { cx:  500, cy: 760, label: 'SOUTH RIDGE',  income: 5, isCenter: false },
-      { cx:  900, cy: 600, label: 'THE PASS',      income: 8, isCenter: true  },
-      { cx: 1300, cy: 430, label: 'NORTH RIDGE',   income: 5, isCenter: false },
-      { cx:  680, cy: 290, label: 'BLACK MARKET',  income: 0, isCenter: false, isBlackMarket: true },
+      { cx: 900, cy: 420,  label: 'NORTH RADAR',  income: 0, isCenter: false, isRadar: true },
+      { cx: 900, cy: 600,  label: 'THE PASS',      income: 8, isCenter: true               },
+      { cx: 900, cy: 780,  label: 'SOUTH RADAR',  income: 0, isCenter: false, isRadar: true },
+      { cx: 700, cy: 1060, label: 'BLACK MARKET', income: 0, isCenter: false, isBlackMarket: true },
     ],
     tibFields: [
-      [350, 840], [430, 620], [660, 480], [900, 590],
-      [1060, 700], [1180, 440], [1440, 560], [1480, 330], [760, 215],
+      // South (player) base zone — x:500–1300, y:840–1200
+      [720, 960], [1080, 960], [900, 1120],
+      // North (enemy) base zone — x:500–1300, y:0–360
+      [720, 240], [1080, 240], [900, 80],
+      // Contested pass resources (inside corridor x:840–960)
+      [900, 480], [900, 720],
     ].map(([cx, cy]) => ({ cx, cy })),
-    // ── Impassable cliff walls: funnel units into diagonal valley ──
+    // ── Canyon walls: everything outside the corridor and base zones ──
     impassableZones: [
-      // Northwest cliff mass — blocks upper-left corner
-      { x: 0,    y: 0,    w: 550, h: 320 },
-      { x: 0,    y: 300,  w: 280, h: 380 },
-      // North cliff wall — caps top of map (leaves enemy base clear top-right)
-      { x: 580,  y: 0,    w: 660, h: 180 },
-      // Central left cliff — squeezes valley near south approach
-      { x: 100,  y: 440,  w: 290, h: 200 },
-      // Southeast cliff mass — blocks lower-right corner
-      { x: 1260, y: 860,  w: 540, h: 340 },
-      { x: 1520, y: 560,  w: 280, h: 320 },
-      // South cliff wall
-      { x: 380,  y: 1020, w: 820, h: 180 },
-      // Central right cliff — squeezes valley near north approach
-      { x: 1410, y: 580,  w: 290, h: 200 },
+      // Corridor left wall (y:360 to y:840)
+      { x: 0,    y: 360, w: 840, h: 480 },
+      // Corridor right wall
+      { x: 960,  y: 360, w: 840, h: 480 },
+      // NW corner (outside north base zone x:500–1300)
+      { x: 0,    y: 0,   w: 500, h: 360 },
+      // NE corner
+      { x: 1300, y: 0,   w: 500, h: 360 },
+      // SW corner (outside south base zone)
+      { x: 0,    y: 840, w: 500, h: 360 },
+      // SE corner
+      { x: 1300, y: 840, w: 500, h: 360 },
+    ],
+    objectives: [
+      'Capture NORTH RADAR to blind enemy scouts',
+      'Hold THE PASS for 120 seconds',
+      'OR destroy the enemy Construction Yard',
     ],
   },
 
   // ── MAP 5: OPERATION SIEGE ───────────────────────────────
-  // Enemy is deeply fortified in a city center with a ring of turrets
-  // and pre-built infrastructure. Player must crack the defensive line
-  // before the enemy economy overwhelms them.
+  // Final push into the heart of the city. Enemy is dug in at top-right.
+  // Townhall in the city centre is the hold-to-win objective.
+  // City Park to the north offers income + cover.
+  // Observation Post far east overlooks enemy territory — radar vision.
+  // 10 hardened turrets guard the enemy HQ. Enemy eco active.
   {
     id: 5,
     name: 'OPERATION SIEGE',
-    subtitle: 'BREAK THE FORTRESS',
-    description: "Enemy forces have fortified the city center with turrets and walls. Crack their defensive line before their economy overwhelms you. Hardest map in the campaign.",
+    subtitle: 'HEART OF THE CITY',
+    description: "Final push. The enemy commands from the northeast district behind 10 reinforced turrets. Capture the Town Hall at the city centre to trigger a ceasefire — or storm their compound directly. An Observation Post in the east gives radar coverage over their lines.",
     theme: 2,
-    startCredits: 1200,
+    startCredits: 2000,
     waveScale:    1.0,
-    enemyHpScale: 1.30,
+    enemyHpScale: 1.50,
     enemyEco:     true,
-    playerBase:   { cx: 200, cy: 600 },
-    enemyBase:    { cx: 1480, cy: 600 },
+    playerBase:   { cx: 120, cy: 1080 },
+    enemyBase:    { cx: 1700, cy: 120 },
     captureNodes: [
-      { cx:  580, cy: 280,  label: 'NORTH DEPOT',  income: 5, isCenter: false },
-      { cx:  900, cy: 600,  label: 'CITY HALL',     income: 8, isCenter: true  },
-      { cx:  580, cy: 920,  label: 'SOUTH DEPOT',   income: 5, isCenter: false },
-      { cx: 1160, cy: 300,  label: 'BLACK MARKET',  income: 0, isCenter: false, isBlackMarket: true },
+      // City Park — north, income bonus
+      { cx:  480, cy: 200, label: 'CITY PARK',        income: 6, isCenter: false },
+      // Town Hall — centre, hold to win
+      { cx:  900, cy: 600, label: 'TOWN HALL',         income: 0, isCenter: true  },
+      // Observation Post — far east, radar/intel
+      { cx: 1580, cy: 680, label: 'OBSERVATION POST', income: 0, isCenter: false, isRadar: true },
+      // Black Market — mid-south
+      { cx:  640, cy: 900, label: 'BLACK MARKET',     income: 0, isCenter: false, isBlackMarket: true },
     ],
     tibFields: [
-      [360, 240], [360, 960], [600, 480], [600, 720],
-      [900, 240], [900, 960], [1100, 460], [1100, 740],
-      [1360, 340], [1360, 860],
+      // Near player (bottom-left)
+      [200, 920], [380, 1060], [260, 1160],
+      // Mid-south approach
+      [560, 820], [700, 650],
+      // Center
+      [860, 720], [940, 480],
+      // Mid-north push
+      [1080, 380], [1300, 520],
+      // Near enemy (top-right)
+      [1480, 240], [1640, 380], [1560, 100],
+      // Park area
+      [350, 320], [620, 180],
+      // East flank
+      [1420, 800], [1600, 900],
     ].map(([cx, cy]) => ({ cx, cy })),
-    // ── Pre-built enemy fortification ring ────────────────────────
+    // ── Enemy fortress: 10 hardened turrets + barracks + WF ──
     extraEnemyBuildings: [
-      // Power supply
-      { type: 'Power Plant', cx: 1650, cy: 450 },
-      { type: 'Power Plant', cx: 1650, cy: 750 },
-      // Outer turret ring — arc facing the player
-      { type: 'Turret', cx: 1280, cy: 390 },
-      { type: 'Turret', cx: 1360, cy: 320 },
-      { type: 'Turret', cx: 1460, cy: 300 },
-      { type: 'Turret', cx: 1560, cy: 330 },
-      { type: 'Turret', cx: 1630, cy: 420 },
-      // Right-flank turrets
-      { type: 'Turret', cx: 1680, cy: 600 },
-      // Lower arc
-      { type: 'Turret', cx: 1630, cy: 780 },
-      { type: 'Turret', cx: 1560, cy: 870 },
-      { type: 'Turret', cx: 1460, cy: 900 },
-      { type: 'Turret', cx: 1360, cy: 880 },
-      { type: 'Turret', cx: 1280, cy: 810 },
-      // Close guard — immediately around CY
-      { type: 'Turret', cx: 1350, cy: 520 },
-      { type: 'Turret', cx: 1350, cy: 680 },
+      // Military core (active from turn 1)
+      { type: 'Barracks',    cx: 1760, cy: 280 },
+      { type: 'War Factory', cx: 1580, cy: 260 },
+      // Turret perimeter — tighter ring of 10
+      // West-facing arc (toward city, primary threat axis):
+      { type: 'Turret', cx: 1380, cy: 200 },
+      { type: 'Turret', cx: 1420, cy: 320 },
+      { type: 'Turret', cx: 1480, cy: 420 },
+      { type: 'Turret', cx: 1560, cy: 480 },
+      { type: 'Turret', cx: 1650, cy: 460 },
+      // Northern arc (rear guard):
+      { type: 'Turret', cx: 1780, cy: 180 },
+      { type: 'Turret', cx: 1760, cy:  60 },
+      { type: 'Turret', cx: 1640, cy:  50 },
+      { type: 'Turret', cx: 1520, cy:  80 },
+      { type: 'Turret', cx: 1430, cy: 100 },
+    ],
+    objectives: [
+      'Capture TOWN HALL and hold for 120 seconds',
+      'OR destroy the enemy Construction Yard',
+      'Capture OBSERVATION POST for radar coverage',
     ],
   },
 ];

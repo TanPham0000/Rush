@@ -190,8 +190,8 @@ export class Engine {
     const isSurvival = md.mode==='survival';
 
     if (isSurvival && md.preBuilt) {
-      // ── BEACH DEFENCE — chaos under fire, dawn invasion feel ──
-      // HQ + Economy (slightly inland, safe for now)
+      // ── BEACH DEFENCE — infrastructure inland, defences ON THE SHORE ──
+      // Inland HQ + economy (pb.cx=200, pb.cy=600 — far left)
       this.buildings.push(new Building(pb.cx,      pb.cy,       'Construction Yard','player',true));
       this.buildings.push(new Building(pb.cx+160,  pb.cy-210,   'Power Plant',      'player',true));
       this.buildings.push(new Building(pb.cx+160,  pb.cy+210,   'Power Plant',      'player',true));
@@ -199,38 +199,73 @@ export class Engine {
       this.buildings.push(new Building(pb.cx+160,  pb.cy+60,    'Refinery',         'player',true));
       this.buildings.push(new Building(pb.cx+320,  pb.cy,       'Barracks',         'player',true));
       this.buildings.push(new Building(pb.cx+320,  pb.cy+170,   'War Factory',      'player',true));
-      // Only 2 turrets — manned positions, barely holding the line
+      // 3 beach turrets ON the shoreline — player can see the sea behind them
       const turretSpots=[
-        [960, 600],  // centre-road chokepoint
-        [950, 200],  // northern sandbag emplacement
+        [1260, 180],   // north shore gun
+        [1260, 600],   // centre shore gun
+        [1260, 1020],  // south shore gun
       ];
       for(const[tx,ty] of turretSpots){
         const t=new Turret(tx,ty,'player'); t.buildPct=1; this.buildings.push(t);
       }
-      // Infantry scattered at the seawall / forward positions — scramble mode
-      // Mix of Infantry and one Grenadier for variety
+      // Infantry on and near the beach — scramble positions facing the sea
       const infSpots=[
-        [460,160],[480,340],[460,540],[480,760],[460,980],[460,1100], // forest cover belt
-        [920,300],[940,480],[920,720],[940,900],  // sandbag positions (forward)
-        [700,420],[720,720],[700,580],            // mid-field (exposed, scrambling)
+        [580, 250],[580, 500],[580, 760],[580, 1000],   // mid-field line
+        [860, 200],[860, 460],[860, 740],[860, 980],    // forward approach
+        [1060,360],[1060,660],                          // beach-line positions
+        [380, 420],[380, 780],                          // cover near base
       ];
       for(const[ix,iy] of infSpots){
         const u=new Unit(ix,iy,'player'); u._game=this._ref; this.pUnits.push(u);
       }
-      // One grenadier at the road chokepoint
-      const gren=new Grenadier(960,600,'player'); gren._game=this._ref; this.pUnits.push(gren);
+      // Grenadier at the centre shore gun
+      const gren=new Grenadier(1260,600,'player'); gren._game=this._ref; this.pUnits.push(gren);
     } else if (md.enemyEco) {
-      // ── ECO-AI maps — player starts normal, enemy starts with just CY ──
+      // ── ECO-AI maps — symmetric start: both sides get CY + PP + Refinery ──
+      // Player economy
       this.buildings.push(new Building(pb.cx,pb.cy,'Construction Yard','player',true));
-      this.buildings.push(new Building(pb.cx+140,pb.cy+170,'Power Plant','player',true));
-      this.buildings.push(new Building(pb.cx+140,pb.cy-170,'Refinery','player',true));
-
-      // Enemy: Construction Yard + minimal guard turrets
-      this.buildings.push(new Building(eb.cx,eb.cy,'Construction Yard','enemy',true));
-      for(const[dx,dy] of [[0,-150],[0,150]]){
-        const et=new Turret(eb.cx+dx,eb.cy+dy,'enemy'); et.buildPct=1; this.buildings.push(et);
+      // Place PP and Refinery away from walls and outside impassable terrain
+      const pSouth = pb.cy > MAP_H * 0.8;
+      const pLeft  = pb.cx < MAP_W * 0.2;
+      const pRight = pb.cx > MAP_W * 0.8;
+      if (pSouth) {
+        // Base is near bottom — put support buildings north, spread east if near left edge
+        const ppX = clamp(pLeft ? pb.cx+150 : pb.cx-160, 60, MAP_W-60);
+        const rfX = clamp(pLeft ? pb.cx+300 : pb.cx+160, 60, MAP_W-60);
+        this.buildings.push(new Building(ppX, clamp(pb.cy-90, 60, MAP_H-60), 'Power Plant','player',true));
+        this.buildings.push(new Building(rfX, clamp(pb.cy-90, 60, MAP_H-60), 'Refinery',   'player',true));
+      } else {
+        const signX = pRight ? -1 : 1;
+        this.buildings.push(new Building(clamp(pb.cx+signX*140,60,MAP_W-60), clamp(pb.cy+170,80,MAP_H-80), 'Power Plant','player',true));
+        this.buildings.push(new Building(clamp(pb.cx+signX*140,60,MAP_W-60), clamp(pb.cy-170,80,MAP_H-80), 'Refinery',   'player',true));
       }
-      // Extra pre-built structures defined per-map (e.g. Operation Siege fortification ring)
+
+      // Enemy economy (symmetric)
+      this.buildings.push(new Building(eb.cx,eb.cy,'Construction Yard','enemy',true));
+      const eNorth = eb.cy < MAP_H * 0.3;
+      const eRight = eb.cx > MAP_W * 0.8;
+      const eLeft  = eb.cx < MAP_W * 0.2;
+      let eStartRef: Building;
+      if (eNorth) {
+        // Base is near top — put support buildings south, spread west if near right edge
+        const ePpX = clamp(eRight ? eb.cx-150 : eb.cx+160, 60, MAP_W-60);
+        const eRfX = clamp(eRight ? eb.cx-300 : eb.cx-160, 60, MAP_W-60);
+        this.buildings.push(new Building(ePpX, clamp(eb.cy+90,60,MAP_H-60), 'Power Plant','enemy',true));
+        eStartRef = new Building(eRfX, clamp(eb.cy+90,60,MAP_H-60), 'Refinery','enemy',true);
+        this.buildings.push(eStartRef);
+      } else {
+        const eSignX = eLeft ? 1 : -1;
+        this.buildings.push(new Building(clamp(eb.cx+eSignX*140,60,MAP_W-60), clamp(eb.cy+140,80,MAP_H-80), 'Power Plant','enemy',true));
+        eStartRef = new Building(clamp(eb.cx+eSignX*140,60,MAP_W-60), clamp(eb.cy-140,80,MAP_H-80), 'Refinery','enemy',true);
+        this.buildings.push(eStartRef);
+      }
+      // Guard turrets — direction-aware flanking
+      const eGuardDy = eb.cy < MAP_H/2 ? 130 : -130;
+      for (const dx of [-120, 120]) {
+        const et=new Turret(clamp(eb.cx+dx,50,MAP_W-50), clamp(eb.cy+eGuardDy,50,MAP_H-50),'enemy'); et.buildPct=1; this.buildings.push(et);
+      }
+
+      // Extra pre-built structures defined per-map (e.g. Operation Siege ring)
       if(md.extraEnemyBuildings){
         for(const{type,cx,cy} of md.extraEnemyBuildings){
           const b=type==='Turret'?new Turret(cx,cy,'enemy'):new Building(cx,cy,type,'enemy',true);
@@ -271,15 +306,28 @@ export class Engine {
     }
     this._ref.pUnits=this.pUnits;
 
+    // ── Eco AI: spawn initial enemy harvester from their pre-built Refinery ──
+    if (md.enemyEco && this._eRef) {
+      const eRef0=this.buildings.find(b=>b.type==='Refinery'&&b.team==='enemy'&&b.isReady);
+      if(eRef0){
+        const eh=new Harvester(eRef0.cx+80, eRef0.cy, this._eRef, 'enemy');
+        this.eUnits.push(eh);
+      }
+    }
+
     // ── Survival wave timer ───────────────────────────────────
-    this._survivalWaveTimer = isSurvival ? 30 : 0;  // first beach wave at 30s
+    this._survivalWaveTimer = isSurvival ? 14 : 0;  // first beach wave at 14s (was 30s)
 
     // ── Starting camera ───────────────────────────────────────
     if (isSurvival && md.preBuilt) {
-      // Zoom out so the player can see the beach and the approaching threat
-      this._zoom = 0.68;
-      this._camX = 0;
+      // Zoom out to show beach AND sea — shifted right so ocean is visible
+      this._zoom = 0.62;
+      this._camX = 280;
       this._camY = clamp(pb.cy - VIEW_H/(2*this._zoom), 0, Math.max(0, MAP_H - VIEW_H/this._zoom));
+    } else if (!isSurvival && md.enemyEco) {
+      // Center camera on player base so south-based maps start correctly
+      this._camX = clamp(pb.cx - VIEW_W/2, 0, Math.max(0, MAP_W - VIEW_W));
+      this._camY = clamp(pb.cy - VIEW_H/2, 0, Math.max(0, MAP_H - VIEW_H));
     }
 
     // ── Capture nodes ─────────────────────────────────────────
@@ -816,6 +864,19 @@ export class Engine {
     this._tickQueues(dt);
 
     // Capture nodes
+    // ── Compute new radar state BEFORE looping (fixes dual-radar oscillation) ──
+    const newRadarActive = this.captureNodes.some(n => n.isRadar && n.team === 'player');
+    if (!this._radarActive && newRadarActive) {
+      sound.captureNode();
+      // Find the radar node for flash position
+      const rn = this.captureNodes.find(n => n.isRadar && n.team === 'player');
+      this.setStatus('RADAR ONLINE — full map revealed!', 'success');
+      if (rn) this._flashMsgs.push({text:'RADAR ONLINE!',x:rn.cx,y:rn.cy-60,t:3,maxT:3,color:'#00FFCC'});
+    } else if (this._radarActive && !newRadarActive) {
+      this.setStatus('RADAR lost — fog of war restored', 'warn');
+    }
+    this._radarActive = newRadarActive;
+
     for(const n of this.captureNodes){
       n.update(dt,this.pUnits,this.eUnits as Unit[]);
       // Black market capture
@@ -824,18 +885,6 @@ export class Engine {
         sound.captureNode();
         this.setStatus('Black Market captured! 3 special abilities available!','success');
         this._flashMsgs.push({text:'BLACK MARKET!',x:n.cx,y:n.cy-60,t:3,maxT:3,color:C.blackMarket});
-      }
-      // ── Radar Tower — full-map vision while held ─────────────
-      if(n.isRadar){
-        const wasActive=this._radarActive;
-        this._radarActive=(n.team==='player');
-        if(!wasActive&&this._radarActive){
-          sound.captureNode();
-          this.setStatus('RADAR ONLINE — full map revealed!','success');
-          this._flashMsgs.push({text:'RADAR ONLINE!',x:n.cx,y:n.cy-60,t:3,maxT:3,color:'#00FFCC'});
-        } else if(wasActive&&!this._radarActive){
-          this.setStatus('RADAR lost — fog of war restored','warn');
-        }
       }
       // ── Beach Gun — spawns a long-range coastal cannon ───────
       if(n.isBeachGun&&!n.beachGunSpawned&&n.team==='player'){
@@ -910,15 +959,27 @@ export class Engine {
     const isSurvival = this._mapDef.mode === 'survival';
 
     if (isSurvival) {
-      // Survival mode: escalating waves from the ocean every ~60s
+      // Survival mode: escalating amphibious assault waves
       this._survivalWaveTimer -= dt;
       if (this._survivalWaveTimer <= 0) {
-        const waveNum = Math.floor(this._gameTime / 60);
-        const infantry = Math.min(14, 3 + Math.floor(waveNum * 0.9));
-        const tanks    = Math.max(0, Math.floor((waveNum - 3) * 0.65));
+        const n = this._waveLabel; // 0-indexed wave number
+        let infantry: number;
+        let tanks: number;
+        if (n === 0) {
+          // Wave 1 — big beach landing, infantry only
+          infantry = 15; tanks = 0;
+        } else if (n === 1) {
+          // Wave 2 — lighter with a tank
+          infantry = 10; tanks = 1;
+        } else {
+          // Wave 3+ — escalate steadily
+          infantry = Math.min(22, 10 + Math.floor((n - 1) * 1.8));
+          tanks    = Math.min(7,   1 + Math.floor((n - 1) * 0.75));
+        }
         this._spawnWave({ infantry, tanks });
         this._waveLabel++;
-        this._survivalWaveTimer = Math.max(35, 65 - waveNum * 2);
+        // Interval shrinks gradually: starts at 45s, floor 25s
+        this._survivalWaveTimer = Math.max(25, 45 - Math.floor(n * 1.5));
         waveIncoming.set(true);
         this.setStatus(`WAVE ${this._waveLabel} — ASSAULT INCOMING!`, 'error');
         setTimeout(() => waveIncoming.set(false), 3000);
@@ -1075,15 +1136,22 @@ export class Engine {
       }
     }
 
-    // Tank (1 every 35-45s)
+    // Tanks from War Factory — scaled by game time
     if(wf&&this._gameTime>=this._eNextTank&&this._eCredits>=UNIT_COST['Tank']){
-      const heavy=this._gameTime>240&&Math.random()<0.28;
-      const cost=heavy?UNIT_COST['Tank']*1.5:UNIT_COST['Tank'];
-      if(this._eCredits>=cost){
+      const heavy=this._gameTime>300&&Math.random()<0.30;
+      const singleCost=heavy?Math.round(UNIT_COST['Tank']*1.5):UNIT_COST['Tank'];
+      // Later in game, spawn 2 tanks at once if affordable
+      const batchSize=this._gameTime>420&&this._eCredits>=singleCost*2?2:1;
+      let spawned=0;
+      for(let ti=0;ti<batchSize;ti++){
+        if(this._eCredits<singleCost)break;
         const ang=Math.random()*Math.PI*2,r=rnd(60,90);
         mkUnit(wf.cx+Math.cos(ang)*r,wf.cy+Math.sin(ang)*r,{tank:true,heavy});
-        this._eCredits-=cost;
-        const interval=Math.max(28,45-Math.floor(this._gameTime/120));
+        this._eCredits-=singleCost;
+        spawned++;
+      }
+      if(spawned>0){
+        const interval=Math.max(25,42-Math.floor(this._gameTime/100));
         this._eNextTank=this._gameTime+interval;
       }
     }
@@ -1170,6 +1238,12 @@ export class Engine {
   _isValidEnemyBuildPos(cx:number,cy:number,type:BType):boolean{
     const d=BDEF[type],bx=cx-d.w/2,by=cy-d.h/2,margin=14;
     if(bx<20||by<20||bx+d.w>MAP_W-20||by+d.h>MAP_H-20)return false;
+    // Don't place in impassable terrain (e.g. canyon walls on DMP)
+    if(this._mapDef.impassableZones){
+      for(const iz of this._mapDef.impassableZones){
+        if(cx>=iz.x&&cx<=iz.x+iz.w&&cy>=iz.y&&cy<=iz.y+iz.h)return false;
+      }
+    }
     for(const b of this.buildings){
       if(bx<b.x+b.w+margin&&bx+d.w+margin>b.x&&by<b.y+b.h+margin&&by+d.h+margin>b.y)return false;
     }

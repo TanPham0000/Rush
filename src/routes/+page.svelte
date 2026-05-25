@@ -8,6 +8,7 @@
     statsHistory, gameTimeElapsed,
     enemiesKilled, unitsLost, unitsProduced,
     survivalMode, survivalTimeLeft, survivalTotal,
+    powerOk,
   } from '$lib/stores/gameStore';
   import type { StatSnap } from '$lib/stores/gameStore';
   import { MAPS } from '$lib/game/constants';
@@ -25,6 +26,10 @@
   let skirmishMap = $state(0);
   let codexUnit   = $state(0);   // selected unit index in codex
   let muted       = $state(false);
+
+  // Mission briefing
+  let showBriefing = $state(false);
+  let briefingMap  = $state<typeof MAPS[0] | null>(null);
 
   function toggleMute() { muted = sound.toggleMute(); }
 
@@ -115,13 +120,19 @@
   function startGame() {
     if (menuMode === 'codex') return;  // no-op from codex tab
     if (menuMode === 'campaign') {
+      briefingMap = MAPS[$campaignMap] ?? MAPS[0];
       engine?.restart();
     } else {
+      briefingMap = MAPS[skirmishMap] ?? MAPS[0];
       engine?.restartMap(skirmishMap);
     }
+    showBriefing = true;
   }
 
   function onGlobalKey(e: KeyboardEvent) {
+    if (e.key === 'Enter' && showBriefing) {
+      showBriefing = false; return;
+    }
     if (e.key === 'Enter' && $gameState === 'menu') {
       startGame();
     } else if (e.key === 'Enter' && ($gameState === 'won' || $gameState === 'lost')) {
@@ -176,7 +187,7 @@
         <span class="wave-badge survival-badge" class:incoming={$waveIncoming}>
           {#if $waveIncoming}⚠ WAVE {$wave} INCOMING{:else}⏱ SURVIVE {fmtCountdown($survivalTimeLeft)}{/if}
         </span>
-      {:else}
+      {:else if !engine?._mapDef?.enemyEco && !$survivalMode && $gameState === 'playing'}
         <span class="wave-badge" class:incoming={$waveIncoming}>
           {$waveIncoming ? '⚠ WAVE INCOMING' : `WAVE ${$wave}`}
         </span>
@@ -206,13 +217,20 @@
     <span class="tick br"></span>
 
     <div class="game-row">
-      <GameCanvas {onEngineReady} minimap={minimapCanvas} />
-      <Sidebar {engine} {muted} onToggleMute={toggleMute}>
-        {#snippet minimap()}
-          <canvas bind:this={minimapCanvas} width="178" height="118" class="minimap"
-            style="cursor:crosshair" onclick={onMinimapClick}></canvas>
-        {/snippet}
-      </Sidebar>
+      <div class="canvas-wrap">
+        <GameCanvas {onEngineReady} minimap={minimapCanvas} />
+        <!-- Minimap — bottom-right of game canvas -->
+        <div class="minimap-float" class:mm-offline={!$powerOk}>
+          <div class="mm-header">{$powerOk ? 'RADAR' : 'RADAR — OFFLINE'}</div>
+          {#if $powerOk}
+            <canvas bind:this={minimapCanvas} width="178" height="118"
+              style="cursor:crosshair;display:block" onclick={onMinimapClick}></canvas>
+          {:else}
+            <div class="mm-dead">⚡ POWER OUT</div>
+          {/if}
+        </div>
+      </div>
+      <Sidebar {engine} {muted} onToggleMute={toggleMute} />
     </div>
 
     <!-- PAUSED OVERLAY — floats over game canvas only -->
@@ -431,6 +449,33 @@
 {/if}
 
 <!-- ══════════════════════════════════════════════════
+     MISSION BRIEFING OVERLAY
+══════════════════════════════════════════════════ -->
+{#if showBriefing && briefingMap}
+<div class="overlay briefing-overlay" onclick={() => showBriefing = false}>
+  <div class="brief-box" onclick={(e) => e.stopPropagation()}>
+    <div class="box-corners"><span></span><span></span><span></span><span></span></div>
+    <div class="brief-op-label">◈ OPERATION BRIEFING</div>
+    <div class="brief-map-name">{briefingMap.name}</div>
+    <div class="brief-subtitle">{briefingMap.subtitle}</div>
+    <div class="brief-divider"></div>
+    <p class="brief-text">{briefingMap.description}</p>
+    {#if briefingMap.objectives?.length}
+    <div class="brief-obj-section">
+      <div class="brief-obj-hdr">▶ MISSION OBJECTIVES</div>
+      {#each briefingMap.objectives as obj}
+      <div class="brief-obj">◉ {obj}</div>
+      {/each}
+    </div>
+    {/if}
+    <div class="brief-divider" style="margin-top:12px"></div>
+    <button class="brief-deploy" onclick={() => showBriefing = false}>▶ DEPLOY FORCES</button>
+    <div class="brief-hint">click anywhere or press ENTER</div>
+  </div>
+</div>
+{/if}
+
+<!-- ══════════════════════════════════════════════════
      WIN / LOSE OVERLAY — Stats Card
 ══════════════════════════════════════════════════ -->
 {#if $gameState === 'won' || $gameState === 'lost'}
@@ -590,6 +635,71 @@
   .tick.bl { bottom: -1px; left: -1px;  border-width: 0 0 2px 2px; }
   .tick.br { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
   .game-row { display: flex; height: 600px; overflow: hidden; }
+  .canvas-wrap { position: relative; flex-shrink: 0; }
+
+  /* ── MINIMAP FLOAT (bottom-right of game canvas) ────── */
+  .minimap-float {
+    position: absolute; bottom: 6px; right: 6px; z-index: 20;
+    background: #060A06; border: 1px solid #1E3A1E; padding: 4px;
+  }
+  .minimap-float.mm-offline { opacity: 0.5; filter: grayscale(1); }
+  .mm-header {
+    color: #3A7A3A; font-size: 7px; letter-spacing: 1.5px;
+    font-family: 'Courier New', monospace; text-align: center; margin-bottom: 3px;
+  }
+  .mm-dead {
+    width: 178px; height: 118px; display: flex; align-items: center;
+    justify-content: center; color: #552222; font-size: 9px;
+    letter-spacing: 1px; font-family: 'Courier New', monospace;
+  }
+
+  /* ── MISSION BRIEFING ──────────────────────────────── */
+  .briefing-overlay {
+    background: rgba(0,4,0,0.88);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .brief-box {
+    position: relative; background: #070D07; border: 2px solid #1E4A1E;
+    padding: 22px 28px; max-width: 480px; width: 90%;
+    font-family: 'Courier New', monospace; color: #88CC88;
+  }
+  .brief-op-label {
+    font-size: 8px; letter-spacing: 3px; color: #3A7A3A; margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  .brief-map-name {
+    font-size: 22px; font-weight: bold; color: #00EE55; letter-spacing: 4px;
+    text-shadow: 0 0 18px rgba(0,238,85,0.55); margin-bottom: 2px;
+  }
+  .brief-subtitle {
+    font-size: 9px; color: #557755; letter-spacing: 2px; margin-bottom: 12px;
+  }
+  .brief-divider {
+    height: 1px; background: #1E3A1E; margin-bottom: 12px;
+  }
+  .brief-text {
+    font-size: 10px; color: #88CC88; line-height: 1.7; margin: 0 0 14px 0;
+  }
+  .brief-obj-section { margin-bottom: 4px; }
+  .brief-obj-hdr {
+    font-size: 8px; color: #FF4444; letter-spacing: 1.5px; margin-bottom: 6px;
+    font-weight: bold; text-shadow: 0 0 6px rgba(255,60,60,0.4);
+  }
+  .brief-obj {
+    font-size: 10px; color: #88CC88; margin-bottom: 5px; padding-left: 6px;
+    border-left: 2px solid #1E5A1E;
+  }
+  .brief-deploy {
+    margin-top: 10px; width: 100%; padding: 10px; background: #0D2B0D;
+    color: #00EE55; border: 1px solid #2A7A2A; font-family: 'Courier New', monospace;
+    font-size: 13px; font-weight: bold; letter-spacing: 3px; cursor: pointer;
+    transition: background 0.1s; text-shadow: 0 0 10px rgba(0,238,85,0.4);
+  }
+  .brief-deploy:hover { background: #153D15; border-color: #44AA44; }
+  .brief-hint {
+    text-align: center; font-size: 7px; color: #2A5A2A; margin-top: 6px;
+    letter-spacing: 1px;
+  }
 
   /* ── STATUS STRIP ──────────────────────────────────── */
   .status-strip {
@@ -599,7 +709,6 @@
     font-family: 'Courier New', monospace;
   }
 
-  :global(.minimap) { display: block; border: 1px solid #1A3A1A; }
 
   /* ── OVERLAY BASE ──────────────────────────────────── */
   .overlay {

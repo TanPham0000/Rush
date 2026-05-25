@@ -1,5 +1,4 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte';
   import {
     credits, powerGen, powerUsed, powerOk, incomeRate,
     wave, nextWaveIn, waveIncoming, totalWaves, gameState,
@@ -13,14 +12,15 @@
     upgrades, blackMarketCaptured, blackMarketAbilities,
   } from '$lib/stores/gameStore';
   import { HOLD_WIN_TIME, UPGRADES } from '$lib/game/constants';
+  import { survivalTimeLeft } from '$lib/stores/gameStore';
   import type { Engine } from '$lib/game/engine';
   import {
     Building, Turret, Harvester, Unit, Tank, HeavyTank,
     Grenadier, Artillery, Scout, AntitankGun, EnemyUnit,
   } from '$lib/game/entities';
 
-  interface Props { engine: Engine | null; minimap: Snippet; muted: boolean; onToggleMute: () => void; }
-  let { engine, minimap, muted, onToggleMute }: Props = $props();
+  interface Props { engine: Engine | null; muted: boolean; onToggleMute: () => void; }
+  let { engine, muted, onToggleMute }: Props = $props();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function unitLabel(e: any): string {
@@ -41,7 +41,13 @@
   const singleSel  = $derived($selected.length === 1 ? $selected[0] : null);
   const holdPct    = $derived($holdProgress / HOLD_WIN_TIME);
   const centerNode = $derived($captureNodesState.find(n => n.isCenter));
-  const objLabel   = $derived(engine?._mapDef?.enemyEco ? 'DESTROY ENEMY HQ' : 'DESTROY WAR FACTORY');
+  const isSurvival = $derived(engine?._mapDef?.mode === 'survival');
+  const objLabel   = $derived(
+    isSurvival ? 'DEFEND YOUR BASE' :
+    engine?._mapDef?.enemyEco ? 'DESTROY ENEMY HQ' : 'DESTROY WAR FACTORY'
+  );
+  // Only show wave counter on wave-based tutorial map (not eco / survival)
+  const isWaveMap  = $derived(!engine?._mapDef?.enemyEco && engine?._mapDef?.mode !== 'survival');
 </script>
 
 <aside>
@@ -89,10 +95,10 @@
     <div class="obj-hp">{$warFactoryHp} / {$warFactoryMaxHp} HP</div>
   </div>
 
-  <!-- Alt Win: Hold Control Center -->
+  <!-- Alt Win: Hold primary objective node -->
   {#if centerNode}
   <div class="hold-box" class:active={centerNode.team === 'player'} class:enemy={centerNode.team === 'enemy'}>
-    <div class="hold-lbl">◉ CONTROL CENTER</div>
+    <div class="hold-lbl">◉ {centerNode.label}</div>
     <div class="hold-sub">
       {#if centerNode.team === 'player'}
         HOLDING {Math.floor(centerNode.holdTimer)}s / {HOLD_WIN_TIME}s
@@ -123,11 +129,23 @@
     {/each}
   </div>
 
-  <!-- Wave -->
+  <!-- Survival timer (only shown on survival maps) -->
+  {#if isSurvival}
+  <div class="wave-box" class:incoming={$waveIncoming}>
+    <span class="surv-lbl">🌊 WAVE {$wave}</span>
+    <span class="surv-timer" class:low={$survivalTimeLeft < 120}>
+      ⏱ {Math.floor($survivalTimeLeft / 60)}:{String($survivalTimeLeft % 60).padStart(2,'0')}
+    </span>
+  </div>
+  {/if}
+
+  <!-- Wave (only shown on wave-based maps) -->
+  {#if isWaveMap}
   <div class="wave-box" class:incoming={$waveIncoming}>
     <span>WAVE {$wave} / {$totalWaves}+</span>
     <span class="next-in">NEXT: {$nextWaveIn}s</span>
   </div>
+  {/if}
 
   <!-- Kill stats -->
   <div class="kill-bar">
@@ -327,18 +345,7 @@
   </div>
   {/if}
 
-  <!-- Minimap — hidden when power out -->
-  {#if $powerOk}
-  <div class="section minimap-wrap">
-    <div class="section-label">RADAR</div>
-    {@render minimap()}
-  </div>
-  {:else}
-  <div class="section minimap-dead">
-    <div class="section-label">RADAR — OFFLINE</div>
-    <div class="no-radar">⚡ POWER FAILURE<br>Radar offline</div>
-  </div>
-  {/if}
+  <!-- Minimap moved to bottom-right overlay of the game canvas -->
 
   <!-- Info panel -->
   <div class="info-panel">
@@ -453,6 +460,9 @@
   .wave-box { display:flex; justify-content:space-between; align-items:center; padding:4px 10px; font-size:9px; color:#557755; border-bottom:1px solid #1A2E1A; background:#0B120B; transition:background 0.3s; }
   .wave-box.incoming { background:#1A0A08; color:#FF4422; }
   .next-in { color:#FFAA44; }
+  .surv-lbl { color:#1188CC; font-weight:bold; letter-spacing:1px; }
+  .surv-timer { color:#44AAFF; font-size:10px; font-weight:bold; font-variant-numeric: tabular-nums; }
+  .surv-timer.low { color:#FF6622; animation:blink 1s infinite; }
   .kill-bar { display:flex; justify-content:space-between; padding:3px 10px; background:#0A0F0A; border-bottom:1px solid #1A2E1A; font-size:8px; letter-spacing:1px; }
   .k-kills  { color:#33FF88; font-weight:bold; }
   .k-lost   { color:#FF5544; }
