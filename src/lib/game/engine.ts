@@ -475,12 +475,12 @@ export class Engine {
   // ── TRAIN ─────────────────────────────────────────────────
   // ── Barracks ──────────────────────────────────────────────
   trainInfantry() { this._queueTrain('Barracks',this._upgrades.has('Grenadier')?'Grenadier':'Infantry',UNIT_COST['Infantry']); }
+  trainScout()     { this._queueTrain('Barracks','Scout',UNIT_COST['Scout']); }
   trainAntitank(){
     if(!this._upgrades.has('AntitankGun'))return this.setStatus('AntitankGun upgrade required!','error');
     this._queueTrain('Barracks','AntitankGun',UNIT_COST['AntitankGun']);
   }
   // ── War Factory ───────────────────────────────────────────
-  trainScout()     { this._queueTrain('War Factory','Scout',UNIT_COST['Scout']); }
   trainTank()      { this._queueTrain('War Factory',this._upgrades.has('HeavyTank')?'HeavyTank':'Tank',UNIT_COST['Tank']); }
   trainArtillery(){
     if(!this._upgrades.has('ArtilleryUnit'))return this.setStatus('Artillery upgrade required!','error');

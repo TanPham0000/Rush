@@ -223,4 +223,57 @@ export const MAPS: MapDef[] = [
     survivalDuration: 900,
     preBuilt:         true,
   },
+
+  // ── MAP 4: DEAD MAN'S PASS ───────────────────────────────
+  // Diagonal layout — player pushes up-right, enemy pushes down-left.
+  // A single highland valley runs between them. Flankers thrive here.
+  {
+    id: 4,
+    name: "DEAD MAN'S PASS",
+    subtitle: 'HOLD THE VALLEY',
+    description: "Two forces converge on a mountain pass. There is no river, no cover, only the ridge. The first to commit to the center usually wins — or dies trying.",
+    theme: 1,
+    startCredits: 750,
+    waveScale:    1.35,
+    enemyHpScale: 1.22,
+    playerBase:   { cx: 230, cy: 980 },
+    enemyBase:    { cx: 1570, cy: 220 },
+    captureNodes: [
+      { cx:  500, cy: 760, label: 'SOUTH RIDGE',  income: 5, isCenter: false },
+      { cx:  900, cy: 600, label: 'THE PASS',      income: 8, isCenter: true  },
+      { cx: 1300, cy: 430, label: 'NORTH RIDGE',   income: 5, isCenter: false },
+      { cx:  680, cy: 290, label: 'BLACK MARKET',  income: 0, isCenter: false, isBlackMarket: true },
+    ],
+    tibFields: [
+      [350, 840], [430, 620], [660, 480], [900, 590],
+      [1060, 700], [1180, 440], [1440, 560], [1480, 330], [760, 190],
+    ].map(([cx, cy]) => ({ cx, cy })),
+  },
+
+  // ── MAP 5: IRON SIEGE ────────────────────────────────────
+  // Both bases on the vertical axis — player bottom-centre, enemy top-centre.
+  // The front line is a wide urban grid. No river splits the map; every
+  // street is a contested kill zone. Hardest standard map in the campaign.
+  {
+    id: 5,
+    name: 'IRON SIEGE',
+    subtitle: 'NO MERCY IN THE RUINS',
+    description: "Two armies locked in a vertical siege through a shattered city. The front line runs through the civic center. Push hard or be pushed back.",
+    theme: 2,
+    startCredits: 500,
+    waveScale:    1.55,
+    enemyHpScale: 1.40,
+    playerBase:   { cx: 900, cy: 1050 },
+    enemyBase:    { cx: 900, cy:  280 },
+    captureNodes: [
+      { cx:  360, cy: 600, label: 'WEST QUARTER',  income: 5, isCenter: false },
+      { cx:  900, cy: 600, label: 'CITY HALL',      income: 8, isCenter: true  },
+      { cx: 1440, cy: 600, label: 'EAST QUARTER',   income: 5, isCenter: false },
+      { cx: 1220, cy: 880, label: 'BLACK MARKET',   income: 0, isCenter: false, isBlackMarket: true },
+    ],
+    tibFields: [
+      [220, 870], [220, 330], [580, 950], [580, 250],
+      [900, 800], [900, 400], [1220, 950], [1550, 330], [1550, 870],
+    ].map(([cx, cy]) => ({ cx, cy })),
+  },
 ];

@@ -174,7 +174,7 @@
     </button>
   </div>
 
-  <!-- Barracks train — infantry only -->
+  <!-- Barracks train — infantry + recon -->
   {#if $selHasBarracks}
   <div class="section">
     <div class="section-label">BARRACKS — TRAIN</div>
@@ -182,6 +182,11 @@
       onclick={() => engine?.trainInfantry()}>
       <span class="bn">{$upgrades.includes('Grenadier') ? 'Grenadier★' : 'Infantry'}</span>
       <span class="bc">100¢ · {$upgrades.includes('Grenadier') ? '11s' : '8s'}</span>
+    </button>
+    <button class="btn full scout-btn" disabled={$credits<80||$gameState!=='playing'}
+      onclick={() => engine?.trainScout()}
+      style="margin-top:3px">
+      <span class="bn">Scout Car</span><span class="bc">80¢ · 5s · fast recon</span>
     </button>
     {#if $upgrades.includes('AntitankGun')}
     <button class="btn full atg-btn" disabled={$credits<280||$gameState!=='playing'}
@@ -193,15 +198,10 @@
   </div>
   {/if}
 
-  <!-- War Factory train — vehicles -->
+  <!-- War Factory train — armour only -->
   {#if $selHasWarFactory}
   <div class="section">
-    <div class="section-label">WAR FACTORY — VEHICLES</div>
-    <button class="btn full" disabled={$credits<80||$gameState!=='playing'}
-      onclick={() => engine?.trainScout()}
-      style="margin-bottom:3px">
-      <span class="bn">Scout Car</span><span class="bc">80¢ · 5s · fast recon</span>
-    </button>
+    <div class="section-label">WAR FACTORY — ARMOUR</div>
     <button class="btn full" disabled={$credits<400||$gameState!=='playing'}
       onclick={() => engine?.trainTank()}>
       <span class="bn">{$upgrades.includes('HeavyTank') ? 'Heavy Tank★' : 'Tank'}</span>
@@ -471,6 +471,8 @@
   .wf-btn.active { border-color:#FFD700; }
   .minimap-dead { padding:8px 10px; background:#0A0808; }
   .no-radar { color:#552222; font-size:9px; text-align:center; padding:10px; line-height:1.8; letter-spacing:1px; }
+  .scout-btn { background:#081A18; border-color:#0E4A44; color:#44DDCC; }
+  .scout-btn:hover:not(:disabled) { background:#0D2422; border-color:#22AA99; }
   .arty-btn { background:#1A1A08; border-color:#5A5A1A; }
   .arty-btn:hover:not(:disabled) { background:#282810; border-color:#AAAA33; }
   .atg-btn  { background:#0D1A2D; border-color:#1A3A6A; }
