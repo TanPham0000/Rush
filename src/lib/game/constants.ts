@@ -76,6 +76,20 @@ export const UNIT_COST: Record<string, number> = {
   'Harvester':   300,
 };
 
+// ── RESEARCH TIMES (seconds) ─────────────────────────────────
+export const RESEARCH_TIME: Record<string, number> = {
+  // Tech Lab
+  'Grenadier':     22,
+  'HeavyTank':     32,
+  'AntitankGun':   20,
+  'ArtilleryUnit': 38,
+  // Armoury
+  'ArmUnitHp':     20,
+  'ArmUnitDmg':    20,
+  'ArmUnitSpd':    16,
+  'ArmTrench':     26,
+};
+
 // ── UPGRADES (researched at Tech Lab) ────────────────────────
 export interface UpgradeDef { label: string; desc: string; cost: number; key: string }
 export const UPGRADES: UpgradeDef[] = [
@@ -131,6 +145,7 @@ export interface MapDef {
   startCredits:     number;
   waveScale:        number;
   enemyHpScale:     number;
+  difficulty?:      1 | 2 | 3;    // explicit difficulty rating (1-3 pips); defaults to Math.ceil(waveScale)
   playerBase:       { cx: number; cy: number };
   enemyBase:        { cx: number; cy: number };
   captureNodes:     CaptureNodeDef[];
@@ -199,10 +214,22 @@ export const MAPS: MapDef[] = [
       { cx: 1150, cy: 200,  label: 'BLACK MARKET',  income: 0, isCenter: false, isBlackMarket: true },
     ],
     tibFields: [
-      [240,900],[320,280],[600,780],[900,200],
+      [240,900],[320,280],[640,780],[900,200],   // [600,780] moved to 640 — clear of west ridge
       [1080,980],[1380,540],[1620,780],[520,480],[1100,1080],
       [700,300],[1260,400],[400,600],
     ].map(([cx,cy]) => ({ cx, cy })),
+    // ── Two cliff ridgelines — create 3 tactical routes ──────
+    // Route 1 (north strip): y < 180
+    // Route 2 (central road): y = 410–600 through both ridges
+    // Route 3 (south flank): y > 870 (player base side)
+    impassableZones: [
+      // West ridge
+      { x: 490, y: 180, w: 120, h: 230 },   // block between north and center (y=180–410)
+      { x: 490, y: 620, w: 120, h: 250 },   // block between center and south (y=620–870)
+      // East ridge
+      { x: 1020, y: 200, w: 120, h: 200 },  // block between north and center (y=200–400)
+      { x: 1020, y: 600, w: 120, h: 260 },  // block between center and south (y=600–860)
+    ],
     objectives: [
       'PRIMARY — Destroy the enemy Construction Yard',
       'SECONDARY — Capture SUMMIT (deep in enemy lines)',
@@ -256,15 +283,16 @@ export const MAPS: MapDef[] = [
     playerBase:   { cx: 200, cy: 600 },
     enemyBase:    { cx: 1760, cy: 600 },
     captureNodes: [
-      // Radar + beach gun (existing)
+      // Radar — kept inland (user request: radar stays)
       { cx: 720,  cy: 220,  label: 'RADAR TOWER',    income: 0, isCenter: false, isRadar:    true },
-      { cx: 1260, cy: 960,  label: 'BEACH GUN',      income: 0, isCenter: false, isBeachGun: true },
-      // Passive income — fight for these to keep your economy going
-      { cx: 560,  cy: 120,  label: 'NORTH SUPPLY',   income: 3, isCenter: false },
-      { cx: 680,  cy: 600,  label: 'COMMAND POST',   income: 4, isCenter: false },
-      { cx: 560,  cy: 1080, label: 'SOUTH SUPPLY',   income: 3, isCenter: false },
-      // Engineer Depot — forward mid-beach, waves will contest it
-      { cx: 700,  cy: 420,  label: 'ENGINEER DEPOT', income: 2, isCenter: false, isEngineer: true },
+      // Beach Gun — right at the seawall face, high-value contested
+      { cx: 1340, cy: 980,  label: 'BEACH GUN',      income: 0, isCenter: false, isBeachGun: true },
+      // Income nodes — pushed into approach/seawall zone so they're genuinely fought over
+      { cx: 1080, cy:  140, label: 'NORTH SUPPLY',   income: 3, isCenter: false },
+      { cx: 1160, cy:  600, label: 'COMMAND POST',   income: 4, isCenter: false },
+      { cx: 1080, cy: 1060, label: 'SOUTH SUPPLY',   income: 3, isCenter: false },
+      // Engineer Depot — mid-forward, between defense line and seawall
+      { cx: 1020, cy:  380, label: 'ENGINEER DEPOT', income: 2, isCenter: false, isEngineer: true },
     ],
     tibFields: [
       // Near-base fields (always accessible)
@@ -274,6 +302,7 @@ export const MAPS: MapDef[] = [
       // Forward — high risk, high reward
       [820, 420], [820, 780],
     ].map(([cx,cy]) => ({ cx, cy })),
+    difficulty:       3,
     mode:             'survival',
     survivalDuration: 900,
     preBuilt:         true,
@@ -346,6 +375,7 @@ export const MAPS: MapDef[] = [
     id: 5,
     name: 'OPERATION SIEGE',
     subtitle: 'HEART OF THE CITY',
+    difficulty:       3,
     description: "Final push. The enemy commands from the northeast district behind 10 reinforced turrets. Storm their compound and destroy their Construction Yard — there is no other way out. Capture City Park for cover and the Observation Post for full radar.",
     theme: 2,
     startCredits: 2000,
@@ -385,6 +415,11 @@ export const MAPS: MapDef[] = [
       // Military core (active from turn 1)
       { type: 'Barracks',    cx: 1760, cy: 280 },
       { type: 'War Factory', cx: 1580, cy: 260 },
+      // 3 extra Power Plants — without these the 10+2 turrets create -55 net power
+      // and the eco AI wastes all income building PPs instead of training units
+      { type: 'Power Plant', cx: 1680, cy: 360 },
+      { type: 'Power Plant', cx: 1560, cy: 390 },
+      { type: 'Power Plant', cx: 1760, cy: 420 },
       // Turret perimeter — tighter ring of 10
       // West-facing arc (toward city, primary threat axis):
       { type: 'Turret', cx: 1380, cy: 200 },

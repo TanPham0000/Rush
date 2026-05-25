@@ -10,7 +10,7 @@
     enemiesKilled, unitsLost,
     selBuildingQueue, captureNodesState, holdProgress,
     upgrades, blackMarketCaptured, blackMarketAbilities,
-    hasArmoury, selHasArmoury,
+    hasArmoury, selHasArmoury, researchingKeys,
   } from '$lib/stores/gameStore';
   import { HOLD_WIN_TIME, UPGRADES, ARMOURY_UPGRADES } from '$lib/game/constants';
   import { survivalTimeLeft } from '$lib/stores/gameStore';
@@ -237,14 +237,21 @@
   <div class="section">
     <div class="section-label">WAR FACTORY — ARMOUR</div>
     <button class="btn full" disabled={$credits<400||$gameState!=='playing'}
-      onclick={() => engine?.trainTank()}>
-      <span class="bn">{$upgrades.includes('HeavyTank') ? 'Heavy Tank★' : 'Tank'}</span>
-      <span class="bc">400¢ · {$upgrades.includes('HeavyTank') ? '26s' : '20s'}</span>
+      onclick={() => engine?.trainTank()}
+      style="margin-bottom:3px">
+      <span class="bn">Tank</span><span class="bc">400¢ · 20s</span>
     </button>
+    {#if $upgrades.includes('HeavyTank')}
+    <button class="btn full hvytank-btn" disabled={$credits<400||$gameState!=='playing'}
+      onclick={() => engine?.trainHeavyTank()}
+      style="margin-bottom:3px">
+      <span class="bn">Heavy Tank★</span><span class="bc">400¢ · 26s · +60% HP, +30% dmg</span>
+    </button>
+    {/if}
     {#if $upgrades.includes('ArtilleryUnit')}
     <button class="btn full arty-btn" disabled={$credits<550||$gameState!=='playing'}
       onclick={() => engine?.trainArtillery()}
-      style="margin-top:3px">
+      style="margin-bottom:3px">
       <span class="bn">Artillery★</span><span class="bc">550¢ · 28s · long range</span>
     </button>
     {/if}
@@ -256,13 +263,14 @@
   <div class="section">
     <div class="section-label">TECH LAB — RESEARCH</div>
     {#each UPGRADES as upg}
-    {@const done = $upgrades.includes(upg.key)}
-    <button class="btn full upg-btn" class:done
-      disabled={$credits < upg.cost || $gameState !== 'playing' || done}
+    {@const done   = $upgrades.includes(upg.key)}
+    {@const queued = $researchingKeys.includes(upg.key)}
+    <button class="btn full upg-btn" class:done class:queued
+      disabled={$credits < upg.cost || $gameState !== 'playing' || done || queued}
       onclick={() => engine?.researchUpgrade(upg.key)}
       style="margin-bottom:2px">
-      <span class="bn">{upg.label}{done ? ' ✓' : ''}</span>
-      <span class="bc">{done ? 'RESEARCHED' : `${upg.cost}¢ — ${upg.desc}`}</span>
+      <span class="bn">{upg.label}{done ? ' ✓' : queued ? ' ⏳' : ''}</span>
+      <span class="bc">{done ? 'RESEARCHED' : queued ? 'RESEARCHING…' : `${upg.cost}¢ — ${upg.desc}`}</span>
     </button>
     {/each}
   </div>
@@ -273,13 +281,14 @@
   <div class="section armoury-section">
     <div class="section-label">🛡 ARMOURY — INFANTRY</div>
     {#each ARMOURY_UPGRADES as upg}
-    {@const done = $upgrades.includes(upg.key)}
-    <button class="btn full arm-upg-btn" class:done
-      disabled={$credits < upg.cost || $gameState !== 'playing' || done}
+    {@const done   = $upgrades.includes(upg.key)}
+    {@const queued = $researchingKeys.includes(upg.key)}
+    <button class="btn full arm-upg-btn" class:done class:queued
+      disabled={$credits < upg.cost || $gameState !== 'playing' || done || queued}
       onclick={() => engine?.researchArmouryUpgrade(upg.key)}
       style="margin-bottom:2px">
-      <span class="bn">{upg.label}{done ? ' ✓' : ''}</span>
-      <span class="bc">{done ? 'RESEARCHED' : `${upg.cost}¢ — ${upg.desc}`}</span>
+      <span class="bn">{upg.label}{done ? ' ✓' : queued ? ' ⏳' : ''}</span>
+      <span class="bc">{done ? 'RESEARCHED' : queued ? 'RESEARCHING…' : `${upg.cost}¢ — ${upg.desc}`}</span>
     </button>
     {/each}
   </div>
@@ -528,13 +537,16 @@
   .no-radar { color:#552222; font-size:9px; text-align:center; padding:10px; line-height:1.8; letter-spacing:1px; }
   .scout-btn { background:#081A18; border-color:#0E4A44; color:#44DDCC; }
   .scout-btn:hover:not(:disabled) { background:#0D2422; border-color:#22AA99; }
+  .hvytank-btn { background:#0A1620; border-color:#1A4060; color:#66AAFF; }
+  .hvytank-btn:hover:not(:disabled) { background:#122030; border-color:#3366AA; color:#AADDFF; }
   .arty-btn { background:#1A1A08; border-color:#5A5A1A; }
   .arty-btn:hover:not(:disabled) { background:#282810; border-color:#AAAA33; }
   .atg-btn  { background:#0D1A2D; border-color:#1A3A6A; }
   .atg-btn:hover:not(:disabled) { background:#152240; border-color:#336699; }
   .upg-btn  { background:#0D2020; border-color:#1E5040; font-size:8px; }
   .upg-btn:hover:not(:disabled) { background:#153830; border-color:#44AA88; }
-  .upg-btn.done { opacity:0.5; background:#0A1A10; border-color:#1A3A28; }
+  .upg-btn.done   { opacity:0.5; background:#0A1A10; border-color:#1A3A28; }
+  .upg-btn.queued { background:#0D2030; border-color:#2A5070; color:#66AACC; cursor:default; }
   .turret-upg-section { background:#0A1A14; border-color:#1A4A30; }
   .turret-upg-section .section-label { color:#44CC88; }
   .ai-turret-btn { background:#0A1F0A; border-color:#1A5A22; color:#66FF88; }

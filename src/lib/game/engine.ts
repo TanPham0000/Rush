@@ -3,7 +3,7 @@ import {
   BDEF, WAVES, ENDLESS_INTERVAL,
   FOG_CELL, FOG_COLS, FOG_ROWS,
   TRAIN_TIME, UNIT_COST, HOLD_WIN_TIME,
-  MAPS, C, ARMOURY_UPGRADES,
+  MAPS, C, ARMOURY_UPGRADES, UPGRADES, RESEARCH_TIME,
 } from './constants';
 import type { BType, MapDef } from './constants';
 import { rnd, rndi, hypot, clamp, resetIds, nextId } from './utils';
@@ -25,7 +25,7 @@ import {
   warFactoryHp, warFactoryMaxHp,
   enemiesKilled, unitsLost, unitsProduced,
   selBuildingQueue, captureNodesState, holdProgress,
-  upgrades as upgradesStore,
+  upgrades as upgradesStore, researchingKeys,
   blackMarketCaptured, blackMarketAbilities,
   statsHistory, gameTimeElapsed, campaignMap,
   paused as pausedStore,
@@ -35,9 +35,10 @@ import { sound } from './sound';
 import { get } from 'svelte/store';
 
 // ═══════════════════════════════════════════════════════════════
-// BUILD QUEUE
+// BUILD / RESEARCH QUEUES
 // ═══════════════════════════════════════════════════════════════
-interface QueueItem { type:string; timer:number; maxTimer:number; bldId:number }
+interface QueueItem    { type:string; timer:number; maxTimer:number; bldId:number }
+interface ResearchItem { key:string; label:string; timer:number; maxTimer:number }
 
 // ═══════════════════════════════════════════════════════════════
 // FX
@@ -98,6 +99,8 @@ export class Engine {
 
   // Build queue
   _queues: Map<number,QueueItem[]>=new Map();
+  // Research queue (Tech Lab + Armoury)
+  _researchQueues: Map<number,ResearchItem[]>=new Map();
 
   // Upgrades & campaign
   _upgrades:   Set<string>=new Set();
@@ -167,7 +170,7 @@ export class Engine {
     this._tibSpawnTimer=rnd(55,80); this._tibSpawnCount=0; this._tibRespawnQueue=[];
     this._gameTime=0; this._waveIndex=0; this._wavesPassed=0;
     this._spawnTimer=WAVES[0].at; this._wavePending=false; this._waveLabel=0;
-    this._queues=new Map(); this._upgrades=new Set();
+    this._queues=new Map(); this._researchQueues=new Map(); this._upgrades=new Set();
     this._fogGrid=new Uint8Array(FOG_COLS*FOG_ROWS);
     this._camX=0; this._camY=300; this._zoom=1.0;
     this._blackMarketCaptured=false;
@@ -417,15 +420,20 @@ export class Engine {
 
   // ── UPGRADES ─────────────────────────────────────────────
   researchUpgrade(key:string){
-    const UPGRADE_COST:Record<string,number>={Grenadier:400,HeavyTank:500,AntitankGun:350,ArtilleryUnit:600};
-    const cost=UPGRADE_COST[key]??999;
+    const upg=UPGRADES.find(u=>u.key===key); if(!upg)return;
     if(this._upgrades.has(key))return this.setStatus('Already researched!','warn');
-    if(this._credits<cost)return this.setStatus('Not enough credits!','error');
-    if(!this.buildings.some(b=>b.team==='player'&&b.type==='Tech Lab'))return this.setStatus('Tech Lab required!','error');
-    this._credits-=cost;
-    this._upgrades.add(key);
-    sound.upgrade();
-    this.setStatus(`${key} unlocked!`,'success');
+    // Check not already queued anywhere
+    for(const rq of this._researchQueues.values()){ if(rq.some(r=>r.key===key))return this.setStatus('Already queued!','warn'); }
+    if(this._credits<upg.cost)return this.setStatus('Not enough credits!','error');
+    const tl=this._selected.find(e=>e instanceof Building&&e.type==='Tech Lab'&&e.team==='player') as Building|undefined;
+    if(!tl)return this.setStatus('Select a Tech Lab first!','warn');
+    if(!tl.isReady)return this.setStatus('Tech Lab still under construction!','warn');
+    this._credits-=upg.cost;
+    const time=RESEARCH_TIME[key]??22;
+    const q=this._researchQueues.get(tl.id)??[];
+    q.push({key,label:upg.label,timer:time,maxTimer:time});
+    this._researchQueues.set(tl.id,q);
+    this.setStatus(`${upg.label} queued — ${time}s`,'success');
     this._syncStores();
   }
 
@@ -558,23 +566,19 @@ export class Engine {
   }
 
   researchArmouryUpgrade(key:string){
+    const upg=ARMOURY_UPGRADES.find(u=>u.key===key); if(!upg)return;
     if(this._upgrades.has(key))return this.setStatus('Already researched!','warn');
-    if(!this.buildings.some(b=>b.team==='player'&&b.type==='Armoury'))return this.setStatus('Armoury required!','error');
-    const upg=ARMOURY_UPGRADES.find(u=>u.key===key);
-    if(!upg)return;
+    for(const rq of this._researchQueues.values()){ if(rq.some(r=>r.key===key))return this.setStatus('Already queued!','warn'); }
     if(this._credits<upg.cost)return this.setStatus('Not enough credits!','error');
+    const arm=this._selected.find(e=>e instanceof Building&&e.type==='Armoury'&&e.team==='player') as Building|undefined;
+    if(!arm)return this.setStatus('Select an Armoury first!','warn');
+    if(!arm.isReady)return this.setStatus('Armoury still under construction!','warn');
     this._credits-=upg.cost;
-    this._upgrades.add(key);
-    // Retroactively apply to existing player infantry
-    for(const u of this.pUnits){
-      if(!this._isInfantry(u))continue;
-      if(key==='ArmUnitHp')  { u.maxHp=Math.floor(u.maxHp*1.20); u.hp=Math.min(u.hp*1.20,u.maxHp); }
-      if(key==='ArmUnitDmg') { u.atkDmg*=1.20; }
-      if(key==='ArmUnitSpd') { u.speed*=1.15; }
-      if(key==='ArmTrench')  { u.canEntrench=true; }
-    }
-    sound.upgrade();
-    this.setStatus(`${upg.label} researched!`,'success');
+    const time=RESEARCH_TIME[key]??20;
+    const q=this._researchQueues.get(arm.id)??[];
+    q.push({key,label:upg.label,timer:time,maxTimer:time});
+    this._researchQueues.set(arm.id,q);
+    this.setStatus(`${upg.label} queued — ${time}s`,'success');
     this._syncStores();
   }
 
@@ -608,7 +612,11 @@ export class Engine {
     this._queueTrain('Barracks','AntitankGun',UNIT_COST['AntitankGun']);
   }
   // ── War Factory ───────────────────────────────────────────
-  trainTank()      { this._queueTrain('War Factory',this._upgrades.has('HeavyTank')?'HeavyTank':'Tank',UNIT_COST['Tank']); }
+  trainTank()      { this._queueTrain('War Factory','Tank',UNIT_COST['Tank']); }
+  trainHeavyTank() {
+    if(!this._upgrades.has('HeavyTank'))return this.setStatus('Heavy Tank upgrade required!','error');
+    this._queueTrain('War Factory','HeavyTank',UNIT_COST['HeavyTank']);
+  }
   trainArtillery(){
     if(!this._upgrades.has('ArtilleryUnit'))return this.setStatus('Artillery upgrade required!','error');
     this._queueTrain('War Factory','Artillery',UNIT_COST['Artillery']);
@@ -660,6 +668,34 @@ export class Engine {
         queue.shift();
         sound.unitReady();
         this.setStatus(`${item.type} ready!`,'success');
+      }
+    }
+  }
+
+  _tickResearch(dt:number){
+    for(const [bldId,q] of this._researchQueues){
+      if(!q.length)continue;
+      const bld=this.buildings.find(b=>b.id===bldId&&b.isAlive());
+      if(!bld){this._researchQueues.delete(bldId);continue;}
+      if(!bld.isReady)continue; // pause while building is under construction
+      const item=q[0]; item.timer-=dt;
+      if(item.timer<=0){
+        q.shift();
+        this._upgrades.add(item.key);
+        // Armoury upgrades — retroactively apply to existing infantry
+        if(bld.type==='Armoury'){
+          for(const u of this.pUnits){
+            if(!this._isInfantry(u))continue;
+            if(item.key==='ArmUnitHp') { u.maxHp=Math.floor(u.maxHp*1.20); u.hp=Math.min(u.hp*1.20,u.maxHp); }
+            if(item.key==='ArmUnitDmg') { u.atkDmg*=1.20; }
+            if(item.key==='ArmUnitSpd') { u.speed*=1.15; }
+            if(item.key==='ArmTrench')  { u.canEntrench=true; }
+          }
+        }
+        sound.upgrade();
+        this.setStatus(`${item.label} complete!`,'success');
+        this._flashMsgs.push({text:`${item.label.toUpperCase()} ONLINE`,x:bld.cx,y:bld.y-30,t:2.5,maxT:2.5,color:bld.type==='Armoury'?'#AACCFF':'#00FFCC'});
+        this._syncStores();
       }
     }
   }
@@ -926,6 +962,7 @@ export class Engine {
     for(const e of this.eUnits) e.update(dt,allUnits,this.projectiles);
 
     this._tickQueues(dt);
+    this._tickResearch(dt);
 
     // Capture nodes
     // ── Compute new radar state BEFORE looping (fixes dual-radar oscillation) ──
@@ -1209,18 +1246,18 @@ export class Engine {
     const wf=this.buildings.find(b=>b.team==='enemy'&&b.type==='War Factory'&&b.isReady);
 
     // Set initial training times when buildings first become ready
-    if(barracks&&this._eNextInfantry===9999) this._eNextInfantry=this._gameTime+12;
-    if(wf&&this._eNextTank===9999)           this._eNextTank=this._gameTime+20;
+    if(barracks&&this._eNextInfantry===9999) this._eNextInfantry=this._gameTime+8;  // was 12
+    if(wf&&this._eNextTank===9999)           this._eNextTank=this._gameTime+18;
 
-    // Infantry batch (group of 2-3 every 22-28s)
-    if(barracks&&this._gameTime>=this._eNextInfantry&&this._eCredits>=UNIT_COST['Infantry']*3){
-      const count=2+Math.min(3,Math.floor(this._gameTime/120)); // bigger groups later
+    // Infantry batch — more aggressive: 3–7 units, shorter intervals, lower credit gate
+    if(barracks&&this._gameTime>=this._eNextInfantry&&this._eCredits>=UNIT_COST['Infantry']*2){
+      const count=3+Math.min(4,Math.floor(this._gameTime/90)); // 3→7 over ~6 min
       for(let i=0;i<count;i++){
         const ang=Math.random()*Math.PI*2,r=rnd(50,80);
         mkUnit(barracks.cx+Math.cos(ang)*r,barracks.cy+Math.sin(ang)*r);
         this._eCredits-=UNIT_COST['Infantry'];
       }
-      const interval=Math.max(18,28-Math.floor(this._gameTime/90)); // shrinks over time
+      const interval=Math.max(12,22-Math.floor(this._gameTime/80)); // 22s→12s over ~8 min
       this._eNextInfantry=this._gameTime+interval;
       if(this.eUnits.length>0){
         waveIncoming.set(true);
@@ -1229,12 +1266,12 @@ export class Engine {
       }
     }
 
-    // Tanks from War Factory — scaled by game time
+    // Tanks from War Factory — scale with game time, heavier sooner
     if(wf&&this._gameTime>=this._eNextTank&&this._eCredits>=UNIT_COST['Tank']){
-      const heavy=this._gameTime>300&&Math.random()<0.30;
+      const heavy=this._gameTime>180&&Math.random()<0.30; // heavy tanks earlier (was 300s)
       const singleCost=heavy?Math.round(UNIT_COST['Tank']*1.5):UNIT_COST['Tank'];
-      // Later in game, spawn 2 tanks at once if affordable
-      const batchSize=this._gameTime>420&&this._eCredits>=singleCost*2?2:1;
+      // Batch 2 tanks once economy is rolling
+      const batchSize=this._gameTime>320&&this._eCredits>=singleCost*2?2:1;
       let spawned=0;
       for(let ti=0;ti<batchSize;ti++){
         if(this._eCredits<singleCost)break;
@@ -1244,7 +1281,7 @@ export class Engine {
         spawned++;
       }
       if(spawned>0){
-        const interval=Math.max(25,42-Math.floor(this._gameTime/100));
+        const interval=Math.max(20,35-Math.floor(this._gameTime/90)); // was max(25,42)
         this._eNextTank=this._gameTime+interval;
       }
     }
@@ -1293,8 +1330,9 @@ export class Engine {
         if(ok)return;
       }
     }
-    // 3. Barracks (needs 5 power)
-    if(!hasAny('Barracks')&&hasReady('Power Plant')&&ePower>=5){
+    // 3. Barracks (needs at least 0 net power — guard turrets eat the buffer
+    //    so requiring >= 5 was blocking Barracks for too long on eco maps)
+    if(!hasAny('Barracks')&&hasReady('Power Plant')&&ePower>=0){
       if(this._eCredits>=BDEF['Barracks'].cost){
         const ok=this._enemyPlace('Barracks',eb.cx+rnd(-150,150),eb.cy+rnd(-100,100));
         if(ok)return;
@@ -1610,9 +1648,19 @@ export class Engine {
     enemiesKilled.set(this._enemiesKilled); unitsLost.set(this._unitsLost); unitsProduced.set(this._unitsProduced);
     const selBld=this._selected.find(e=>e instanceof Building&&e.team==='player') as Building|undefined;
     if(selBld){
-      const q=this._queues.get(selBld.id)??[];
-      selBuildingQueue.set({head:q[0]?{type:q[0].type,pct:1-q[0].timer/q[0].maxTimer}:null,rest:q.slice(1).map(qi=>qi.type)});
+      if(selBld.type==='Tech Lab'||selBld.type==='Armoury'){
+        // Show research queue
+        const rq=this._researchQueues.get(selBld.id)??[];
+        selBuildingQueue.set({head:rq[0]?{type:rq[0].label,pct:1-rq[0].timer/rq[0].maxTimer}:null,rest:rq.slice(1).map(ri=>ri.label)});
+      } else {
+        const q=this._queues.get(selBld.id)??[];
+        selBuildingQueue.set({head:q[0]?{type:q[0].type,pct:1-q[0].timer/q[0].maxTimer}:null,rest:q.slice(1).map(qi=>qi.type)});
+      }
     } else { selBuildingQueue.set({head:null,rest:[]}); }
+    // All keys currently in any research queue
+    const allResearching:string[]=[];
+    for(const rq of this._researchQueues.values()) allResearching.push(...rq.map(r=>r.key));
+    researchingKeys.set(allResearching);
     captureNodesState.set(this.captureNodes.map(n=>({label:n.label,team:n.team,progress:n.progress,isCenter:n.isCenter,isBlackMarket:n.isBlackMarket,isRadar:n.isRadar,isBeachGun:n.isBeachGun,isPark:n.isPark,isEngineer:n.isEngineer,holdTimer:n.holdTimer})));
     const center=this.captureNodes.find(n=>n.isCenter);
     holdProgress.set(center?center.holdTimer:0);

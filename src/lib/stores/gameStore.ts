@@ -81,7 +81,8 @@ export const captureNodesState = writable<NodeState[]>([]);
 export const holdProgress      = writable(0);
 
 // ── Upgrades ─────────────────────────────────────────────────
-export const upgrades = writable<string[]>([]);   // list of researched upgrade keys
+export const upgrades        = writable<string[]>([]);   // list of researched upgrade keys
+export const researchingKeys = writable<string[]>([]);   // keys currently in a research queue
 
 // ── Black market abilities ───────────────────────────────────
 export const blackMarketCaptured  = writable(false);

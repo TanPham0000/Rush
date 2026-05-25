@@ -332,12 +332,14 @@
               <span class="mc-mode-tag">⏱ SURVIVAL</span>
             {:else}
               <span class="mcd-lbl">DIFF</span>
-              <span class="mcd-pips">
-                {#each Array(3) as _, p}
-                <span class="mcd-pip" class:lit={p < Math.ceil(m.waveScale)}></span>
-                {/each}
-              </span>
             {/if}
+            <span class="mcd-pips">
+              {#each Array(3) as _, p}
+              <span class="mcd-pip"
+                class:lit={p < (m.difficulty ?? Math.ceil(m.waveScale))}
+                class:survival-pip={m.mode === 'survival'}></span>
+              {/each}
+            </span>
           </div>
         </button>
         {/each}
@@ -837,6 +839,7 @@
   .mcd-pips { display: flex; gap: 3px; }
   .mcd-pip { width: 8px; height: 8px; border: 1px solid #1A3A1A; background: #0A120A; }
   .mcd-pip.lit { background: #00CC55; border-color: #00EE55; box-shadow: 0 0 4px rgba(0,238,85,0.5); }
+  .mcd-pip.lit.survival-pip { background: #0088CC; border-color: #00AAFF; box-shadow: 0 0 4px rgba(0,170,255,0.5); }
   .sk-brief { margin-bottom: 0; }
 
   /* Controls grid */

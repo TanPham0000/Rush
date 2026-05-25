@@ -67,26 +67,45 @@ export class TerrainMap {
   }
 
   // ── HILLS layout ──────────────────────────────────────
+  // Two cliff ridgelines divide the map into 3 routes (see map impassableZones).
+  // High ground zones are clustered at ridge flanks — ideal Artillery/Marksman positions.
   private _initHills() {
     (this.forests as ForestZone[]).push(
-      { x:  80,  y:  200, w: 280, h: 200 }, { x:  80,  y:  700, w: 250, h: 220 },
-      { x:  400, y:  50,  w: 200, h: 180 }, { x: 1280, y:  500, w: 240, h: 200 },
-      { x: 1440, y:  800, w: 240, h: 200 }, { x:  600, y:  900, w: 200, h: 180 },
-      { x:  300, y: 1000, w: 180, h: 160 }, { x: 1050, y:   80, w: 220, h: 160 },
+      // Player-side cover
+      { x:  60,  y:  180, w: 280, h: 220 }, { x:  60,  y:  700, w: 260, h: 230 },
+      { x:  300, y:  920, w: 200, h: 180 }, { x:  360, y:   40, w: 180, h: 160 },
+      // Between ridge 1 and ridge 2 — contested center
+      { x:  650, y:  120, w: 200, h: 160 }, { x:  680, y:  880, w: 200, h: 180 },
+      // Enemy-side dense forest
+      { x: 1280, y:  480, w: 240, h: 200 }, { x: 1440, y:  820, w: 240, h: 200 },
+      { x: 1050, y:   60, w: 220, h: 160 },
     );
+    // High ground flanks the ridge passes — put Artillery here to control the routes
     (this.highGround as HighGround[]).push(
-      { x:  150, y:  550, w: 240, h: 180 }, { x:  350, y:  280, w: 200, h: 160 },
-      { x:  550, y:  650, w: 180, h: 140 }, { x:  750, y:  300, w: 200, h: 180 },
-      { x:  850, y:  700, w: 200, h: 160 }, { x: 1050, y:  450, w: 240, h: 180 },
-      { x: 1300, y:  200, w: 200, h: 160 }, { x: 1500, y:  550, w: 180, h: 140 },
+      // West of ridge 1, flanking the center pass (y≈410–620)
+      { x:  280, y:  380, w: 200, h: 200 },
+      // East of ridge 1, center pass overlook
+      { x:  620, y:  400, w: 180, h: 200 },
+      // West of ridge 2, center pass overlook
+      { x:  830, y:  370, w: 200, h: 220 },
+      // East of ridge 2, above enemy lines
+      { x: 1160, y:  400, w: 200, h: 200 },
+      // North corridor flanks — ideal Marksman overwatch
+      { x:  300, y:   40, w: 180, h: 140 },
+      { x:  740, y:   40, w: 200, h: 160 },
+      { x: 1200, y:   40, w: 200, h: 160 },
+      // Enemy high-ground stronghold
+      { x: 1380, y:  200, w: 260, h: 200 },
     );
     (this.rocks as RockCluster[]).push(
-      { cx:  300, cy:  480, r: 40 }, { cx:  520, cy:  350, r: 36 },
-      { cx:  700, cy:  580, r: 34 }, { cx:  850, cy:  180, r: 30 },
-      { cx:  950, cy:  900, r: 34 }, { cx: 1100, cy:  650, r: 36 },
-      { cx: 1260, cy:  340, r: 32 }, { cx: 1400, cy:  720, r: 30 },
-      { cx:  420, cy: 1020, r: 28 }, { cx: 1550, cy:  380, r: 28 },
-      { cx:  650, cy:  130, r: 26 }, { cx: 1180, cy:  980, r: 26 },
+      // Ridge-face rocks — visual cue for impassable zones
+      { cx:  490, cy:  290, r: 44 }, { cx:  550, cy:  530, r: 40 },
+      { cx:  490, cy:  740, r: 44 }, { cx: 1020, cy:  300, r: 40 },
+      { cx: 1080, cy:  500, r: 38 }, { cx: 1020, cy:  720, r: 40 },
+      // Scattered rocks
+      { cx:  700, cy:  580, r: 32 }, { cx:  860, cy:  220, r: 30 },
+      { cx:  950, cy:  900, r: 32 }, { cx: 1300, cy:  680, r: 28 },
+      { cx:  420, cy: 1020, r: 28 }, { cx: 1560, cy:  380, r: 26 },
     );
   }
 

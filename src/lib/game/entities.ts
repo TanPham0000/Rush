@@ -594,11 +594,11 @@ export class TiberiumField {
   radius:    number = 52;
   regenRate: number = 2.8;
   isRich:    boolean = false;
-  // Rounded rock shapes: rx/ry are semi-axes, phase offsets independent pulse per rock
-  private _rocks: Array<{x:number;y:number;rx:number;ry:number;angle:number;phase:number}>=[];
+  private _crystals: Array<{x:number;y:number;h:number;w:number;angle:number}>=[];
 
   constructor(cx: number, cy: number) {
     this.id=nextId(); this.cx=cx; this.cy=cy;
+    // 30% chance of a rich (high-yield) field
     this.isRich = Math.random() < 0.30;
     if (this.isRich) {
       this.capacity = rnd(3500, 5500);
@@ -606,20 +606,10 @@ export class TiberiumField {
     } else {
       this.capacity = rnd(1500, 2800);
     }
-    this.remaining = this.capacity;
-    const n      = this.isRich ? rndi(14,20) : rndi(9,14);
-    const spread = this.isRich ? 42 : 32;
-    for(let i=0;i<n;i++){
-      const rx = rnd(this.isRich ? 7 : 4.5, this.isRich ? 14 : 10);
-      this._rocks.push({
-        x:     cx + rnd(-spread, spread),
-        y:     cy + rnd(-spread, spread),
-        rx,
-        ry:    rx * rnd(0.45, 0.75),   // flatter than wide → natural rock profile
-        angle: rnd(-Math.PI, Math.PI),
-        phase: rnd(0, Math.PI*2),
-      });
-    }
+    this.remaining=this.capacity;
+    const n = this.isRich ? rndi(18,26) : rndi(12,20);
+    const spread = this.isRich ? 44 : 36;
+    for(let i=0;i<n;i++) this._crystals.push({x:cx+rnd(-spread,spread),y:cy+rnd(-spread,spread),h:rnd(this.isRich?18:12,this.isRich?32:24),w:rnd(4,9),angle:rnd(-0.3,0.3)});
   }
 
   isEmpty()  { return this.remaining<=0; }
@@ -629,74 +619,36 @@ export class TiberiumField {
 
   draw(ctx: CanvasRenderingContext2D, t: number) {
     const p=this.pct(); if(p<=0)return;
-
-    // ── Ambient ground stain ───────────────────────────────────
-    const stainAlpha = this.isRich ? 0.16*p : 0.10*p;
-    const stainCol   = this.isRich ? `rgba(100,200,0,${stainAlpha})` : `rgba(0,180,60,${stainAlpha})`;
+    // Rich fields get a warm golden-green aura
+    const stainAlpha = this.isRich ? 0.22*p : 0.13*p;
+    const stainColor = this.isRich ? `rgba(120,220,0,${stainAlpha})` : `rgba(0,200,70,${stainAlpha})`;
     const stain=ctx.createRadialGradient(this.cx,this.cy,0,this.cx,this.cy,this.radius*p);
-    stain.addColorStop(0,stainCol); stain.addColorStop(1,'rgba(0,0,0,0)');
+    stain.addColorStop(0,stainColor); stain.addColorStop(1,'rgba(0,0,0,0)');
     ctx.fillStyle=stain; ctx.beginPath(); ctx.arc(this.cx,this.cy,this.radius*p,0,Math.PI*2); ctx.fill();
-
-    // ── Individual rocks ──────────────────────────────────────
-    // Slow independent pulse per rock: ~8-11 second cycle
-    const glowFreq = this.isRich ? 0.55 : 0.70;
-    const [gcR,gcG,gcB] = this.isRich ? [110,210,0] : [0,200,55];
-
-    for(const r of this._rocks){
-      const rawPulse = 0.78 + 0.22*Math.sin(t*glowFreq + r.phase);
-      const glow     = rawPulse * p;              // scales down as field depletes
-      const scale    = Math.sqrt(p) * (0.90 + 0.10*rawPulse); // rocks shrink when depleted
-
-      ctx.save();
-      ctx.translate(r.x, r.y);
-      ctx.rotate(r.angle);
-
-      // Base rock silhouette — dark stone with faint green mineral tinge
-      ctx.fillStyle = this.isRich ? '#182500' : '#0C1A08';
-      ctx.beginPath();
-      ctx.ellipse(0, 0, r.rx*scale, r.ry*scale, 0, 0, Math.PI*2);
-      ctx.fill();
-
-      // Upper stone face — slightly lighter, simulates a domed surface
-      ctx.fillStyle = this.isRich ? 'rgba(55,75,8,0.80)' : 'rgba(18,50,14,0.80)';
-      ctx.beginPath();
-      ctx.ellipse(r.rx*0.08*scale, -r.ry*0.20*scale, r.rx*0.72*scale, r.ry*0.58*scale, 0, 0, Math.PI*2);
-      ctx.fill();
-
-      // Inner glow — radial gradient from rock centre outward
-      const grd=ctx.createRadialGradient(0,-r.ry*0.15*scale,0, 0,0, r.rx*1.15*scale);
-      grd.addColorStop(0,   `rgba(${gcR},${gcG},${gcB},${0.72*glow})`);
-      grd.addColorStop(0.45,`rgba(${gcR},${gcG},${gcB},${0.30*glow})`);
-      grd.addColorStop(1,   `rgba(0,0,0,0)`);
-      ctx.fillStyle=grd;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, r.rx*1.15*scale, r.ry*1.15*scale, 0, 0, Math.PI*2);
-      ctx.fill();
-
-      // Edge rim — thin bright outline that follows the glow pulse
-      ctx.globalAlpha = 0.25*glow;
-      ctx.strokeStyle=`rgb(${gcR},${gcG},${gcB})`;
-      ctx.lineWidth=0.8;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, r.rx*scale, r.ry*scale, 0, 0, Math.PI*2);
-      ctx.stroke();
+    // Animated pulse (shimmer) — rich fields pulse faster
+    const pulse = this.isRich ? 0.80+0.20*Math.sin(t*3.0) : 0.85+0.15*Math.sin(t*2.2);
+    const green = this.isRich ? Math.floor(160+p*95) : Math.floor(120+p*135);
+    const rChannel = this.isRich ? Math.floor(80+p*80) : 0;  // yellow-gold tinge for rich
+    for(const c of this._crystals){
+      const sh=c.h*p*pulse; ctx.save(); ctx.translate(c.x,c.y); ctx.rotate(c.angle);
+      ctx.fillStyle=`rgb(${rChannel},${green},${Math.floor(green*0.28)})`;
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-c.w/2,sh); ctx.lineTo(c.w/2,sh); ctx.closePath(); ctx.fill();
+      const r2=this.isRich?Math.min(255,rChannel+40):Math.floor(green*0.3);
+      ctx.fillStyle=`rgba(${r2},${Math.min(255,green+90)},${Math.floor(green*0.5)},0.7)`;
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-c.w/4,sh*0.45); ctx.lineTo(c.w/4,sh*0.45); ctx.closePath(); ctx.fill();
+      // Inner glow shimmer
+      ctx.globalAlpha=0.3+0.2*Math.sin(t*3.1+c.x);
+      ctx.fillStyle=this.isRich?`rgba(180,255,60,0.6)`:`rgba(0,255,120,0.5)`;
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-c.w/6,sh*0.3); ctx.lineTo(c.w/6,sh*0.3); ctx.closePath(); ctx.fill();
       ctx.globalAlpha=1;
-
       ctx.restore();
     }
-
-    // ── Depletion bar ─────────────────────────────────────────
-    ctx.fillStyle='rgba(0,0,0,0.55)';
-    ctx.fillRect(this.cx-24,this.cy+this.radius-3,48,4);
-    const barCol = this.isRich
-      ? `rgba(160,${Math.floor(180*p+40)},0,0.9)`
-      : `rgba(0,${Math.floor(190*p+40)},55,0.9)`;
-    ctx.fillStyle=barCol;
-    ctx.fillRect(this.cx-24,this.cy+this.radius-3,48*p,4);
-
-    // Rich field badge
-    if(this.isRich){
-      ctx.fillStyle='rgba(190,210,0,0.82)'; ctx.font='bold 7px "Courier New"'; ctx.textAlign='center';
+    ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(this.cx-24,this.cy+this.radius-3,48,4);
+    const barColor = this.isRich ? `rgba(180,${Math.floor(200*p+40)},0,0.9)` : `rgba(0,${Math.floor(200*p+40)},60,0.9)`;
+    ctx.fillStyle=barColor; ctx.fillRect(this.cx-24,this.cy+this.radius-3,48*p,4);
+    // Rich field label
+    if (this.isRich) {
+      ctx.fillStyle='rgba(200,220,0,0.85)'; ctx.font='bold 7px "Courier New"'; ctx.textAlign='center';
       ctx.fillText('★RICH', this.cx, this.cy+this.radius+10); ctx.textAlign='left';
     }
   }
