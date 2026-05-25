@@ -108,6 +108,8 @@ export interface CaptureNodeDef {
   isRadar?: boolean; isBeachGun?: boolean;
 }
 
+export interface ImpassableZone { x: number; y: number; w: number; h: number }
+
 export interface MapDef {
   id:               number;
   name:             string;
@@ -125,6 +127,11 @@ export interface MapDef {
   mode?:            'standard' | 'survival'; // default 'standard'
   survivalDuration?:number;                  // seconds to survive
   preBuilt?:        boolean;                 // engine places opening base
+  // ── Enemy eco AI ─────────────────────────────────────────
+  enemyEco?:        boolean;                 // enemy builds own base & trains from it
+  extraEnemyBuildings?: { type: BType; cx: number; cy: number }[]; // pre-placed enemy structures beyond CY
+  // ── Terrain ──────────────────────────────────────────────
+  impassableZones?: ImpassableZone[];        // hard terrain blocking unit movement
 }
 
 export const MAPS: MapDef[] = [
@@ -162,6 +169,7 @@ export const MAPS: MapDef[] = [
     startCredits: 800,
     waveScale:    1.15,
     enemyHpScale: 1.10,
+    enemyEco:     true,
     playerBase:   { cx: 230, cy: 900 },
     enemyBase:    { cx: 1600, cy: 300 },
     captureNodes: [
@@ -186,6 +194,7 @@ export const MAPS: MapDef[] = [
     startCredits: 600,
     waveScale:    1.30,
     enemyHpScale: 1.20,
+    enemyEco:     true,
     playerBase:   { cx: 200, cy: 600 },
     enemyBase:    { cx: 1650, cy: 600 },
     captureNodes: [
@@ -225,17 +234,18 @@ export const MAPS: MapDef[] = [
   },
 
   // ── MAP 4: DEAD MAN'S PASS ───────────────────────────────
-  // Diagonal layout — player pushes up-right, enemy pushes down-left.
-  // A single highland valley runs between them. Flankers thrive here.
+  // Diagonal layout — player bottom-left, enemy top-right.
+  // Impassable cliff walls funnel both armies through a narrow central valley.
   {
     id: 4,
     name: "DEAD MAN'S PASS",
     subtitle: 'HOLD THE VALLEY',
-    description: "Two forces converge on a mountain pass. There is no river, no cover, only the ridge. The first to commit to the center usually wins — or dies trying.",
+    description: "Two forces converge on a mountain pass. Sheer cliff walls on each flank leave only one route through. The first to hold The Pass controls the war.",
     theme: 1,
     startCredits: 750,
     waveScale:    1.35,
     enemyHpScale: 1.22,
+    enemyEco:     true,
     playerBase:   { cx: 230, cy: 980 },
     enemyBase:    { cx: 1570, cy: 220 },
     captureNodes: [
@@ -246,34 +256,76 @@ export const MAPS: MapDef[] = [
     ],
     tibFields: [
       [350, 840], [430, 620], [660, 480], [900, 590],
-      [1060, 700], [1180, 440], [1440, 560], [1480, 330], [760, 190],
+      [1060, 700], [1180, 440], [1440, 560], [1480, 330], [760, 215],
     ].map(([cx, cy]) => ({ cx, cy })),
+    // ── Impassable cliff walls: funnel units into diagonal valley ──
+    impassableZones: [
+      // Northwest cliff mass — blocks upper-left corner
+      { x: 0,    y: 0,    w: 550, h: 320 },
+      { x: 0,    y: 300,  w: 280, h: 380 },
+      // North cliff wall — caps top of map (leaves enemy base clear top-right)
+      { x: 580,  y: 0,    w: 660, h: 180 },
+      // Central left cliff — squeezes valley near south approach
+      { x: 100,  y: 440,  w: 290, h: 200 },
+      // Southeast cliff mass — blocks lower-right corner
+      { x: 1260, y: 860,  w: 540, h: 340 },
+      { x: 1520, y: 560,  w: 280, h: 320 },
+      // South cliff wall
+      { x: 380,  y: 1020, w: 820, h: 180 },
+      // Central right cliff — squeezes valley near north approach
+      { x: 1410, y: 580,  w: 290, h: 200 },
+    ],
   },
 
-  // ── MAP 5: IRON SIEGE ────────────────────────────────────
-  // Both bases on the vertical axis — player bottom-centre, enemy top-centre.
-  // The front line is a wide urban grid. No river splits the map; every
-  // street is a contested kill zone. Hardest standard map in the campaign.
+  // ── MAP 5: OPERATION SIEGE ───────────────────────────────
+  // Enemy is deeply fortified in a city center with a ring of turrets
+  // and pre-built infrastructure. Player must crack the defensive line
+  // before the enemy economy overwhelms them.
   {
     id: 5,
-    name: 'IRON SIEGE',
-    subtitle: 'NO MERCY IN THE RUINS',
-    description: "Two armies locked in a vertical siege through a shattered city. The front line runs through the civic center. Push hard or be pushed back.",
+    name: 'OPERATION SIEGE',
+    subtitle: 'BREAK THE FORTRESS',
+    description: "Enemy forces have fortified the city center with turrets and walls. Crack their defensive line before their economy overwhelms you. Hardest map in the campaign.",
     theme: 2,
-    startCredits: 500,
-    waveScale:    1.55,
-    enemyHpScale: 1.40,
-    playerBase:   { cx: 900, cy: 1050 },
-    enemyBase:    { cx: 900, cy:  280 },
+    startCredits: 1200,
+    waveScale:    1.0,
+    enemyHpScale: 1.30,
+    enemyEco:     true,
+    playerBase:   { cx: 200, cy: 600 },
+    enemyBase:    { cx: 1480, cy: 600 },
     captureNodes: [
-      { cx:  360, cy: 600, label: 'WEST QUARTER',  income: 5, isCenter: false },
-      { cx:  900, cy: 600, label: 'CITY HALL',      income: 8, isCenter: true  },
-      { cx: 1440, cy: 600, label: 'EAST QUARTER',   income: 5, isCenter: false },
-      { cx: 1220, cy: 880, label: 'BLACK MARKET',   income: 0, isCenter: false, isBlackMarket: true },
+      { cx:  580, cy: 280,  label: 'NORTH DEPOT',  income: 5, isCenter: false },
+      { cx:  900, cy: 600,  label: 'CITY HALL',     income: 8, isCenter: true  },
+      { cx:  580, cy: 920,  label: 'SOUTH DEPOT',   income: 5, isCenter: false },
+      { cx: 1160, cy: 300,  label: 'BLACK MARKET',  income: 0, isCenter: false, isBlackMarket: true },
     ],
     tibFields: [
-      [220, 870], [220, 330], [580, 950], [580, 250],
-      [900, 800], [900, 400], [1220, 950], [1550, 330], [1550, 870],
+      [360, 240], [360, 960], [600, 480], [600, 720],
+      [900, 240], [900, 960], [1100, 460], [1100, 740],
+      [1360, 340], [1360, 860],
     ].map(([cx, cy]) => ({ cx, cy })),
+    // ── Pre-built enemy fortification ring ────────────────────────
+    extraEnemyBuildings: [
+      // Power supply
+      { type: 'Power Plant', cx: 1650, cy: 450 },
+      { type: 'Power Plant', cx: 1650, cy: 750 },
+      // Outer turret ring — arc facing the player
+      { type: 'Turret', cx: 1280, cy: 390 },
+      { type: 'Turret', cx: 1360, cy: 320 },
+      { type: 'Turret', cx: 1460, cy: 300 },
+      { type: 'Turret', cx: 1560, cy: 330 },
+      { type: 'Turret', cx: 1630, cy: 420 },
+      // Right-flank turrets
+      { type: 'Turret', cx: 1680, cy: 600 },
+      // Lower arc
+      { type: 'Turret', cx: 1630, cy: 780 },
+      { type: 'Turret', cx: 1560, cy: 870 },
+      { type: 'Turret', cx: 1460, cy: 900 },
+      { type: 'Turret', cx: 1360, cy: 880 },
+      { type: 'Turret', cx: 1280, cy: 810 },
+      // Close guard — immediately around CY
+      { type: 'Turret', cx: 1350, cy: 520 },
+      { type: 'Turret', cx: 1350, cy: 680 },
+    ],
   },
 ];

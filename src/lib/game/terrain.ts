@@ -1,5 +1,5 @@
 import { MAP_W, MAP_H, GRID, C } from './constants';
-import type { MapTheme } from './constants';
+import type { MapTheme, ImpassableZone } from './constants';
 import { rnd, rndi } from './utils';
 
 export interface ForestZone  { x: number; y: number; w: number; h: number }
@@ -14,18 +14,20 @@ export class TerrainMap {
   // ── Theme 0 (rivers) ─────────────────────────────────────
   readonly riverX = (y: number) => 900 + 60 * Math.sin(y * 0.0045);
   readonly rW = 64;
-  readonly bridges: Bridge[]      = [];
-  readonly forests: ForestZone[]  = [];
+  readonly bridges: Bridge[]        = [];
+  readonly forests: ForestZone[]    = [];
   readonly highGround: HighGround[] = [];
-  readonly rocks: RockCluster[]   = [];
-  readonly cityBlocks: CityBlock[] = [];
+  readonly rocks: RockCluster[]     = [];
+  readonly cityBlocks: CityBlock[]  = [];
+  cliffZones: ImpassableZone[]      = [];
 
   private _off:   HTMLCanvasElement;
   private _trees: Array<{ x:number; y:number; r:number; shade:string }> = [];
 
-  constructor(theme: MapTheme = 0) {
-    this.theme  = theme;
-    this._off   = document.createElement('canvas');
+  constructor(theme: MapTheme = 0, cliffZones: ImpassableZone[] = []) {
+    this.theme      = theme;
+    this.cliffZones = cliffZones;
+    this._off        = document.createElement('canvas');
     this._off.width  = MAP_W;
     this._off.height = MAP_H;
     this._initLayout();
@@ -312,6 +314,7 @@ export class TerrainMap {
     }
 
     this._drawRocks(c);
+    this._renderCliffs(c);  // cliffs drawn last — solid and impassable
   }
 
   // ══════════════════════════════════════════════════════════
@@ -542,6 +545,50 @@ export class TerrainMap {
     c.fillText('OCEAN', MAP_W-75, MAP_H/2+8); c.textAlign='left';
   }
 
+  // ── Cliff zone renderer ──────────────────────────────────
+  private _renderCliffs(c: CanvasRenderingContext2D) {
+    for (const cz of this.cliffZones) {
+      // Solid dark rock base
+      c.fillStyle = '#0E0C08'; c.fillRect(cz.x, cz.y, cz.w, cz.h);
+      // Layered gradient for depth
+      const cg = c.createLinearGradient(cz.x, cz.y, cz.x + cz.w * 0.6, cz.y + cz.h);
+      cg.addColorStop(0,   '#1A1610');
+      cg.addColorStop(0.4, '#120E08');
+      cg.addColorStop(0.8, '#1C1810');
+      cg.addColorStop(1,   '#0E0C06');
+      c.fillStyle = cg; c.fillRect(cz.x, cz.y, cz.w, cz.h);
+      // Horizontal strata lines (rock layers)
+      c.strokeStyle = 'rgba(60,50,20,0.45)'; c.lineWidth = 1;
+      const step = 22;
+      for (let yi = cz.y + (step / 2); yi < cz.y + cz.h; yi += step) {
+        c.beginPath(); c.moveTo(cz.x, yi);
+        for (let xi = cz.x; xi <= cz.x + cz.w; xi += 16) {
+          c.lineTo(xi, yi + (Math.sin(xi * 0.07 + yi * 0.04) * 3));
+        }
+        c.stroke();
+      }
+      // Vertical crack lines
+      c.strokeStyle = 'rgba(0,0,0,0.5)'; c.lineWidth = 1.2;
+      const crackCount = Math.floor(cz.w / 60);
+      for (let i = 0; i < crackCount; i++) {
+        const cx = cz.x + (i + 0.5) * (cz.w / crackCount) + rnd(-20, 20);
+        const cy0 = cz.y + rnd(0, cz.h * 0.3);
+        c.beginPath(); c.moveTo(cx, cy0);
+        c.lineTo(cx + rnd(-12, 12), cy0 + rnd(20, 40));
+        c.lineTo(cx + rnd(-18, 18), cy0 + rnd(50, 80));
+        c.stroke();
+      }
+      // Bright edge highlight (top/left lip — gives 3-D cliff face look)
+      c.strokeStyle = 'rgba(80,70,30,0.55)'; c.lineWidth = 2;
+      c.strokeRect(cz.x, cz.y, cz.w, cz.h);
+      // "CLIFF" label in center of large zones
+      if (cz.w > 120 && cz.h > 80) {
+        c.fillStyle = 'rgba(70,60,25,0.7)'; c.font = 'bold 8px "Courier New"'; c.textAlign = 'center';
+        c.fillText('✕ CLIFF', cz.x + cz.w / 2, cz.y + cz.h / 2 + 4); c.textAlign = 'left';
+      }
+    }
+  }
+
   // ── Shared rock drawer ───────────────────────────────────
   private _drawRocks(c: CanvasRenderingContext2D) {
     for (const r of this.rocks) {
@@ -614,7 +661,12 @@ export class TerrainMap {
     return this.theme === 2 && this.cityBlocks.some(b => x>=b.x && x<=b.x+b.w && y>=b.y && y<=b.y+b.h);
   }
 
+  isImpassable(x: number, y: number): boolean {
+    return this.cliffZones.some(cz => x >= cz.x && x <= cz.x + cz.w && y >= cz.y && y <= cz.y + cz.h);
+  }
+
   speedMult(x: number, y: number): number {
+    if (this.isImpassable(x, y)) return 0.0;  // full stop in cliffs
     if (this.onRock(x, y) || this.inCityBlock(x, y)) return 0.28;
     if (this.inRiver(x, y))    return 0.12;
     if (this.onBeachSand(x,y)) return 0.78;  // soft sand

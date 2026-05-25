@@ -41,6 +41,7 @@
   const singleSel  = $derived($selected.length === 1 ? $selected[0] : null);
   const holdPct    = $derived($holdProgress / HOLD_WIN_TIME);
   const centerNode = $derived($captureNodesState.find(n => n.isCenter));
+  const objLabel   = $derived(engine?._mapDef?.enemyEco ? 'DESTROY ENEMY HQ' : 'DESTROY WAR FACTORY');
 </script>
 
 <aside>
@@ -83,7 +84,7 @@
 
   <!-- Objective -->
   <div class="objective">
-    <div class="obj-lbl">▶ DESTROY WAR FACTORY</div>
+    <div class="obj-lbl">▶ {objLabel}</div>
     <div class="obj-bg"><div class="obj-fill" style="width:{wfPct*100}%"></div></div>
     <div class="obj-hp">{$warFactoryHp} / {$warFactoryMaxHp} HP</div>
   </div>

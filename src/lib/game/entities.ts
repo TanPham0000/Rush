@@ -844,10 +844,20 @@ export class Unit extends Entity {
     const dx=tx-this.x,dy=ty-this.y;
     const d=Math.hypot(dx,dy); if(d<0.1)return;
     this.angle=Math.atan2(dy,dx);
-    const sm=this._game?.terrain.speedMult(this.x,this.y)??1;
+    const terr=this._game?.terrain;
+    const sm=terr?.speedMult(this.x,this.y)??1;
     const suppress=this._suppressTimer>0?0.5:1;
     const spd=this.speed*sm*this._speedMult*suppress;
-    this.x+=(dx/d)*spd*dt; this.y+=(dy/d)*spd*dt;
+    const nx=this.x+(dx/d)*spd*dt;
+    const ny=this.y+(dy/d)*spd*dt;
+    // Impassable cliff collision — axis-aligned slide
+    if(terr?.isImpassable(nx,ny)){
+      if(!terr.isImpassable(nx,this.y)) this.x=nx;
+      else if(!terr.isImpassable(this.x,ny)) this.y=ny;
+      // both axes blocked — unit stays put
+    } else {
+      this.x=nx; this.y=ny;
+    }
   }
 
   _separate(units:Unit[]){
@@ -1524,8 +1534,8 @@ export class Harvester extends Unit {
   targetField: TiberiumField|null=null;
   private _refinery: Building|null=null;
 
-  constructor(x:number,y:number,game:GameRef){
-    super(x,y,'player');
+  constructor(x:number,y:number,game:GameRef,team:Team='player'){
+    super(x,y,team);
     this._game=game; this.radius=10; this.speed=62;
     this.hp=this.maxHp=200; this.autoAtk=false;
   }
@@ -1533,7 +1543,7 @@ export class Harvester extends Unit {
   update(dt:number,allUnits:Unit[],_proj:Projectile[]){
     if(this._flash>0)this._flash-=dt;
     const g=this._game!;
-    if(!this._refinery?.isAlive()) this._refinery=g.buildings.find(b=>b.type==='Refinery'&&b.team==='player')??null;
+    if(!this._refinery?.isAlive()) this._refinery=g.buildings.find(b=>b.type==='Refinery'&&b.team===this.team)??null;
     if(this.state==='idle'){
       if(!this._refinery)return;
       if(this.moveTarget)return; // respect player move command — wait until we arrive

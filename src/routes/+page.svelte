@@ -154,7 +154,9 @@
     };
   });
 
-  function onEngineReady(e: Engine) { engine = e; }
+  function onEngineReady(e: Engine) {
+    engine = e;
+  }
 
   // Current map info for display
   const currentMapDef = $derived(MAPS[$campaignMap] ?? MAPS[0]);

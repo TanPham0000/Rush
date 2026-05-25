@@ -124,6 +124,13 @@ export class Engine {
   _radarActive: boolean=false;     // full-map fog reveal
   _beachGunId:  number|null=null;  // turret entity ID spawned by beach gun capture
 
+  // ── Enemy eco AI state ────────────────────────────────────
+  _eCredits:          number=0;
+  _eBuildTimer:       number=4;    // seconds until next build decision
+  _eNextInfantry:     number=9999; // game-time when to train next infantry batch
+  _eNextTank:         number=9999; // game-time when to train next tank
+  _eRef:              GameRef|null=null;
+
   private _raf:number=0;
   private _lastTime:number=0;
   private _stTimer:ReturnType<typeof setTimeout>|null=null;
@@ -135,8 +142,9 @@ export class Engine {
     const idx=get(campaignMap);
     this._campaignMapIdx=idx;
     this._mapDef=MAPS[idx]??MAPS[0];
-    this.terrain=new TerrainMap(this._mapDef.theme);
+    this.terrain=new TerrainMap(this._mapDef.theme, this._mapDef.impassableZones??[]);
     this._ref={ terrain:this.terrain, addCredits:(n)=>this._addCredits(n), buildings:this.buildings, tibFields:this.tibFields, pUnits:this.pUnits };
+    this._eRef={ terrain:this.terrain, addCredits:(n)=>{this._eCredits+=n;}, buildings:this.buildings, tibFields:this.tibFields, pUnits:this.pUnits };
     this._init();
   }
 
@@ -164,12 +172,18 @@ export class Engine {
     this._artilleryTarget=null;
     this._statsTimer=0; this._statsSnaps=[];
     this._radarActive=false; this._beachGunId=null;
+    // ── Eco AI state reset ────────────────────────────────────
+    this._eCredits=400; this._eBuildTimer=3;
+    this._eNextInfantry=9999; this._eNextTank=9999;
 
     this._ref.buildings=this.buildings;
     this._ref.tibFields=this.tibFields;
     this._ref.pUnits=this.pUnits;
     this._ref.onKill=(killer,victim)=>{ /* veterancy handled in Projectile */ };
     this._ref.onExplosion=(x,y,r)=>{ this._boom(x,y,'enemy'); };
+    // Enemy eco ref (addCredits goes to _eCredits)
+    if(!this._eRef) this._eRef={ terrain:this.terrain, addCredits:(n)=>{this._eCredits+=n;}, buildings:this.buildings, tibFields:this.tibFields, pUnits:this.pUnits };
+    else { this._eRef.terrain=this.terrain; this._eRef.buildings=this.buildings; this._eRef.tibFields=this.tibFields; this._eRef.pUnits=this.pUnits; }
 
     const pb=md.playerBase;
     const eb=md.enemyBase;
@@ -205,13 +219,34 @@ export class Engine {
       }
       // One grenadier at the road chokepoint
       const gren=new Grenadier(960,600,'player'); gren._game=this._ref; this.pUnits.push(gren);
-    } else {
-      // ── STANDARD maps — minimal starting base ─────────────
+    } else if (md.enemyEco) {
+      // ── ECO-AI maps — player starts normal, enemy starts with just CY ──
       this.buildings.push(new Building(pb.cx,pb.cy,'Construction Yard','player',true));
       this.buildings.push(new Building(pb.cx+140,pb.cy+170,'Power Plant','player',true));
       this.buildings.push(new Building(pb.cx+140,pb.cy-170,'Refinery','player',true));
 
-      // Enemy base
+      // Enemy: Construction Yard + minimal guard turrets
+      this.buildings.push(new Building(eb.cx,eb.cy,'Construction Yard','enemy',true));
+      for(const[dx,dy] of [[0,-150],[0,150]]){
+        const et=new Turret(eb.cx+dx,eb.cy+dy,'enemy'); et.buildPct=1; this.buildings.push(et);
+      }
+      // Extra pre-built structures defined per-map (e.g. Operation Siege fortification ring)
+      if(md.extraEnemyBuildings){
+        for(const{type,cx,cy} of md.extraEnemyBuildings){
+          const b=type==='Turret'?new Turret(cx,cy,'enemy'):new Building(cx,cy,type,'enemy',true);
+          if(b instanceof Turret)b.buildPct=1;
+          this.buildings.push(b);
+        }
+      }
+      // Eco AI eRef sync
+      if(this._eRef){ this._eRef.terrain=this.terrain; this._eRef.buildings=this.buildings; this._eRef.tibFields=this.tibFields; this._eRef.pUnits=this.pUnits; }
+    } else {
+      // ── STANDARD maps — minimal starting base + pre-built War Factory ──
+      this.buildings.push(new Building(pb.cx,pb.cy,'Construction Yard','player',true));
+      this.buildings.push(new Building(pb.cx+140,pb.cy+170,'Power Plant','player',true));
+      this.buildings.push(new Building(pb.cx+140,pb.cy-170,'Refinery','player',true));
+
+      // Enemy base: pre-built War Factory + turret ring
       this.buildings.push(new Building(eb.cx,eb.cy,'War Factory','enemy',true));
       const turretPositions=[[0,-150],[0,160],[-80,-270],[-80,280]];
       for(const[dx,dy] of turretPositions){
@@ -763,9 +798,17 @@ export class Engine {
       // Construction complete
       if((b as any)._justCompleted){
         (b as any)._justCompleted=false;
-        sound.buildPlace();
-        this._recalcPower();
-        this._flashMsgs.push({text:`${b.type} READY`,x:b.cx,y:b.y-16,t:2,maxT:2,color:C.allyLight});
+        if(b.team==='player'){
+          sound.buildPlace();
+          this._recalcPower();
+          this._flashMsgs.push({text:`${b.type} READY`,x:b.cx,y:b.y-16,t:2,maxT:2,color:C.allyLight});
+        } else if(b.team==='enemy'){
+          // Enemy building complete: spawn Harvester from Refinery
+          if(b.type==='Refinery'&&this._eRef){
+            const eh=new Harvester(b.cx+70,b.cy,this._eRef,'enemy');
+            this.eUnits.push(eh);
+          }
+        }
       }
     }
     for(const e of this.eUnits) e.update(dt,allUnits,this.projectiles);
@@ -820,6 +863,7 @@ export class Engine {
     this.eUnits=this._reap(this.eUnits);
     this.buildings=this._reap(this.buildings) as Building[];
     this._ref.buildings=this.buildings;   // keep enemy-unit game-ref in sync
+    if(this._eRef) this._eRef.buildings=this.buildings;
     this._selected=this._selected.filter(e=>e.isAlive());
     this._recalcPower();
     this._updateFog();
@@ -862,7 +906,7 @@ export class Engine {
       this._statsSnaps.push({t:Math.floor(this._gameTime),kills:this._enemiesKilled,produced:this._unitsProduced,credits:Math.floor(this._credits)});
     }
 
-    // ── Wave timer ────────────────────────────────────────────
+    // ── Wave / eco timer ──────────────────────────────────────
     const isSurvival = this._mapDef.mode === 'survival';
 
     if (isSurvival) {
@@ -874,13 +918,16 @@ export class Engine {
         const tanks    = Math.max(0, Math.floor((waveNum - 3) * 0.65));
         this._spawnWave({ infantry, tanks });
         this._waveLabel++;
-        // Interval shrinks as game progresses (from 60s → 35s min)
         this._survivalWaveTimer = Math.max(35, 65 - waveNum * 2);
         waveIncoming.set(true);
         this.setStatus(`WAVE ${this._waveLabel} — ASSAULT INCOMING!`, 'error');
         setTimeout(() => waveIncoming.set(false), 3000);
       }
+    } else if (this._mapDef.enemyEco) {
+      // Eco AI maps: enemy builds base & trains units — handled each frame
+      this._tickEcoAI(dt);
     } else {
+      // Tutorial map (map 0): wave-based rushing
       this._spawnTimer -= dt;
       if(this._spawnTimer<=0){
         if(this._waveIndex<WAVES.length){
@@ -910,10 +957,19 @@ export class Engine {
       // Lose: Construction Yard destroyed
       const hq = this.buildings.find(b=>b.type==='Construction Yard'&&b.team==='player');
       if (!hq) { this._onLose(); return; }
+    } else if (this._mapDef.enemyEco) {
+      // Eco maps: win = destroy enemy Construction Yard; lose = own CY destroyed
+      const eCY=this.buildings.find(b=>b.type==='Construction Yard'&&b.team==='enemy');
+      if(!eCY){this._onWin();return;}
+      warFactoryHp.set(eCY.hp); warFactoryMaxHp.set(eCY.maxHp);
+      const centerNode=this.captureNodes.find(n=>n.isCenter);
+      if(centerNode&&centerNode.holdTimer>=HOLD_WIN_TIME){this._onWin();return;}
+      const pCY=this.buildings.find(b=>b.type==='Construction Yard'&&b.team==='player');
+      if(!pCY){this._onLose();return;}
     } else {
       const wf=this.buildings.find(b=>b.type==='War Factory'&&b.team==='enemy');
       if(!wf){this._onWin();return;}
-      warFactoryHp.set(wf.hp);
+      warFactoryHp.set(wf.hp); warFactoryMaxHp.set(wf.maxHp);
       const centerNode=this.captureNodes.find(n=>n.isCenter);
       if(centerNode&&centerNode.holdTimer>=HOLD_WIN_TIME){this._onWin();return;}
       const pAlive=this.pUnits.length>0||this.buildings.some(b=>b.team==='player');
@@ -973,6 +1029,153 @@ export class Engine {
       return r>0 && hypot(cx,cy,b.cx,b.cy)<=r;
     });
     if(!inPowerZone)return false;
+    return true;
+  }
+
+  // ── ENEMY ECO AI ──────────────────────────────────────────
+  _tickEcoAI(dt:number){
+    const md=this._mapDef;
+    // Passive enemy income (slightly less than player base to make eco meaningful)
+    this._eCredits+=10*dt;
+
+    // Build decision timer
+    this._eBuildTimer-=dt;
+    if(this._eBuildTimer<=0){ this._eBuildTimer=5; this._tryEnemyBuild(); }
+
+    // Unit training
+    const hsc=md.enemyHpScale;
+    const mkUnit=(x:number,y:number,opts:{tank?:boolean;heavy?:boolean}={})=>{
+      const e=new EnemyUnit(x,y,opts);
+      if(hsc!==1)e.hp=e.maxHp=Math.round(e.hp*hsc);
+      e._game=this._ref; e.mapTheme=md.theme;
+      this.eUnits.push(e);
+    };
+
+    const barracks=this.buildings.find(b=>b.team==='enemy'&&b.type==='Barracks'&&b.isReady);
+    const wf=this.buildings.find(b=>b.team==='enemy'&&b.type==='War Factory'&&b.isReady);
+
+    // Set initial training times when buildings first become ready
+    if(barracks&&this._eNextInfantry===9999) this._eNextInfantry=this._gameTime+12;
+    if(wf&&this._eNextTank===9999)           this._eNextTank=this._gameTime+20;
+
+    // Infantry batch (group of 2-3 every 22-28s)
+    if(barracks&&this._gameTime>=this._eNextInfantry&&this._eCredits>=UNIT_COST['Infantry']*3){
+      const count=2+Math.min(3,Math.floor(this._gameTime/120)); // bigger groups later
+      for(let i=0;i<count;i++){
+        const ang=Math.random()*Math.PI*2,r=rnd(50,80);
+        mkUnit(barracks.cx+Math.cos(ang)*r,barracks.cy+Math.sin(ang)*r);
+        this._eCredits-=UNIT_COST['Infantry'];
+      }
+      const interval=Math.max(18,28-Math.floor(this._gameTime/90)); // shrinks over time
+      this._eNextInfantry=this._gameTime+interval;
+      if(this.eUnits.length>0){
+        waveIncoming.set(true);
+        this.setStatus('Enemy forces mobilising!','warn');
+        setTimeout(()=>waveIncoming.set(false),2000);
+      }
+    }
+
+    // Tank (1 every 35-45s)
+    if(wf&&this._gameTime>=this._eNextTank&&this._eCredits>=UNIT_COST['Tank']){
+      const heavy=this._gameTime>240&&Math.random()<0.28;
+      const cost=heavy?UNIT_COST['Tank']*1.5:UNIT_COST['Tank'];
+      if(this._eCredits>=cost){
+        const ang=Math.random()*Math.PI*2,r=rnd(60,90);
+        mkUnit(wf.cx+Math.cos(ang)*r,wf.cy+Math.sin(ang)*r,{tank:true,heavy});
+        this._eCredits-=cost;
+        const interval=Math.max(28,45-Math.floor(this._gameTime/120));
+        this._eNextTank=this._gameTime+interval;
+      }
+    }
+
+    this._ref.pUnits=this.pUnits;
+  }
+
+  _tryEnemyBuild(){
+    if(!this._eRef)return;
+    const eb=this._mapDef.enemyBase;
+    const eBlds=this.buildings.filter(b=>b.team==='enemy');
+    const hasReady=(t:string)=>eBlds.some(b=>b.type===t&&b.isReady);
+    const hasAny  =(t:string)=>eBlds.some(b=>b.type===t);
+    // Compute current enemy power
+    let eGen=0,eUsed=0;
+    for(const b of eBlds){if(!b.isReady)continue;const p=BDEF[b.type as BType]?.power??0;if(p>0)eGen+=p;else eUsed+=Math.abs(p);}
+    const ePower=eGen-eUsed;
+
+    // 1. Power Plants (need at least 2 ready, or power is tight)
+    const ppCount=eBlds.filter(b=>b.type==='Power Plant').length;
+    if(ppCount<2&&!eBlds.some(b=>b.type==='Power Plant'&&!b.isReady)){
+      if(this._eCredits>=BDEF['Power Plant'].cost){
+        const ok=this._enemyPlace('Power Plant',eb.cx+rnd(-180,180),eb.cy+rnd(-120,120));
+        if(ok)return;
+      }
+    }
+    // 2. Refinery (needs 10 power, gives harvester income)
+    if(!hasAny('Refinery')&&ePower>=10){
+      if(this._eCredits>=BDEF['Refinery'].cost){
+        const ok=this._enemyPlace('Refinery',eb.cx+rnd(-160,160),eb.cy+rnd(-100,100));
+        if(ok)return;
+      }
+    }
+    // 3. Barracks (needs 5 power)
+    if(!hasAny('Barracks')&&hasReady('Power Plant')&&ePower>=5){
+      if(this._eCredits>=BDEF['Barracks'].cost){
+        const ok=this._enemyPlace('Barracks',eb.cx+rnd(-150,150),eb.cy+rnd(-100,100));
+        if(ok)return;
+      }
+    }
+    // 4. Extra Power Plant if needed for War Factory
+    if(ppCount<3&&ePower<5&&!eBlds.some(b=>b.type==='Power Plant'&&!b.isReady)){
+      if(this._eCredits>=BDEF['Power Plant'].cost){
+        const ok=this._enemyPlace('Power Plant',eb.cx+rnd(-200,200),eb.cy+rnd(-140,140));
+        if(ok)return;
+      }
+    }
+    // 5. War Factory (no power cost, expensive)
+    if(!hasAny('War Factory')&&hasReady('Barracks')){
+      if(this._eCredits>=BDEF['War Factory'].cost){
+        const ok=this._enemyPlace('War Factory',eb.cx+rnd(-180,180),eb.cy+rnd(-110,110));
+        if(ok)return;
+      }
+    }
+    // 6. Turrets for defence (up to 8 total, needs power)
+    const turrCount=eBlds.filter(b=>b.type==='Turret').length;
+    if(turrCount<8&&ePower>=5){
+      if(this._eCredits>=BDEF['Turret'].cost){
+        const ang=Math.random()*Math.PI*2,dist=rnd(180,300);
+        this._enemyPlace('Turret',eb.cx+Math.cos(ang)*dist,eb.cy+Math.sin(ang)*dist);
+      }
+    }
+  }
+
+  _enemyPlace(type:BType,preferX:number,preferY:number):boolean{
+    const d=BDEF[type];
+    for(let attempt=0;attempt<25;attempt++){
+      const spread=attempt>8?90:22;
+      const cx=clamp(preferX+rnd(-spread,spread),d.w/2+24,MAP_W-d.w/2-24);
+      const cy=clamp(preferY+rnd(-spread,spread),d.h/2+24,MAP_H-d.h/2-24);
+      if(this._isValidEnemyBuildPos(cx,cy,type)){
+        const b=type==='Turret'?new Turret(cx,cy,'enemy'):new Building(cx,cy,type,'enemy');
+        if(b instanceof Turret)b.buildPct=1;
+        this.buildings.push(b);
+        this._ref.buildings=this.buildings;
+        if(this._eRef)this._eRef.buildings=this.buildings;
+        this._eCredits-=d.cost;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  _isValidEnemyBuildPos(cx:number,cy:number,type:BType):boolean{
+    const d=BDEF[type],bx=cx-d.w/2,by=cy-d.h/2,margin=14;
+    if(bx<20||by<20||bx+d.w>MAP_W-20||by+d.h>MAP_H-20)return false;
+    for(const b of this.buildings){
+      if(bx<b.x+b.w+margin&&bx+d.w+margin>b.x&&by<b.y+b.h+margin&&by+d.h+margin>b.y)return false;
+    }
+    // Don't build too close to player base
+    const pb=this._mapDef.playerBase;
+    if(hypot(cx,cy,pb.cx,pb.cy)<200)return false;
     return true;
   }
 
@@ -1192,8 +1395,13 @@ export class Engine {
     selHasWarFactory.set(this._selected.some(e=>e instanceof Building&&e.type==='War Factory'&&e.team==='player'));
     selHasUnits.set(this._selected.some(e=>e instanceof Unit&&e.team==='player'));
     selHasTechLab.set(this._selected.some(e=>e instanceof Building&&e.type==='Tech Lab'&&e.team==='player'));
-    const wf=this.buildings.find(b=>b.type==='War Factory'&&b.team==='enemy');
-    if(wf)warFactoryHp.set(wf.hp);
+    if(this._mapDef.enemyEco){
+      const eCY=this.buildings.find(b=>b.type==='Construction Yard'&&b.team==='enemy');
+      if(eCY){warFactoryHp.set(eCY.hp);warFactoryMaxHp.set(eCY.maxHp);}
+    }else{
+      const wf=this.buildings.find(b=>b.type==='War Factory'&&b.team==='enemy');
+      if(wf){warFactoryHp.set(wf.hp);warFactoryMaxHp.set(wf.maxHp);}
+    }
     enemiesKilled.set(this._enemiesKilled); unitsLost.set(this._unitsLost); unitsProduced.set(this._unitsProduced);
     const selBld=this._selected.find(e=>e instanceof Building&&e.team==='player') as Building|undefined;
     if(selBld){
@@ -1238,7 +1446,7 @@ export class Engine {
       this._campaignMapIdx=nextIdx;
       campaignMap.set(nextIdx);
       this._mapDef=MAPS[nextIdx];
-      this.terrain=new TerrainMap(this._mapDef.theme);
+      this.terrain=new TerrainMap(this._mapDef.theme,this._mapDef.impassableZones??[]);
       this._ref.terrain=this.terrain;
     }
     this._init();
@@ -1252,7 +1460,7 @@ export class Engine {
     this._campaignMapIdx=mapIdx;
     this._mapDef=MAPS[mapIdx];
     campaignMap.set(mapIdx);
-    this.terrain=new TerrainMap(this._mapDef.theme);
+    this.terrain=new TerrainMap(this._mapDef.theme,this._mapDef.impassableZones??[]);
     this._ref.terrain=this.terrain;
     this._init();
     gameState.set('playing');
