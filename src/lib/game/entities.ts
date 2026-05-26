@@ -1022,19 +1022,23 @@ export class Unit extends Entity {
   }
 
   _separate(units:Unit[]){
+    const terr=this._game?.terrain;
     for(const o of units){
       if(o===this)continue;
       const dx=this.x-o.x,dy=this.y-o.y;
       const d=Math.hypot(dx,dy);
       if(d<0.01)continue;
-      const hard=(this.radius+o.radius)*1.02;  // no-overlap zone (tight)
-      const soft=(this.radius+o.radius)*1.7;   // personal-space zone (reduced from 2.8)
+      const hard=(this.radius+o.radius)*1.02;
+      const soft=(this.radius+o.radius)*1.7;
       if(d<hard){
         const push=(hard-d)*0.30;
-        this.x+=(dx/d)*push; this.y+=(dy/d)*push;
+        const nx=this.x+(dx/d)*push, ny=this.y+(dy/d)*push;
+        // Don't push into impassable cliff zones
+        if(!terr?.isImpassable(nx,ny)){this.x=nx;this.y=ny;}
       } else if(d<soft){
-        const push=(soft-d)*0.018;              // gentler drift (was 0.045)
-        this.x+=(dx/d)*push; this.y+=(dy/d)*push;
+        const push=(soft-d)*0.018;
+        const nx=this.x+(dx/d)*push, ny=this.y+(dy/d)*push;
+        if(!terr?.isImpassable(nx,ny)){this.x=nx;this.y=ny;}
       }
     }
   }
@@ -1213,12 +1217,12 @@ export class Grenadier extends Unit {
 // MARKSMAN — long-range infantry sniper
 // ═══════════════════════════════════════════════════════════════
 export class Marksman extends Unit {
-  visionRadius = 350;
+  visionRadius = 460;  // long-range scouting advantage (was 350)
 
   constructor(x:number,y:number,team:Team='player'){
     super(x,y,team);
     this.hp=this.maxHp=90; this.atkDmg=42; this.atkRange=190; this.atkRate=0.35;
-    this.autoAtkRange=280; this.speed=36;
+    this.autoAtkRange=280; this.speed=28;  // notably slower than infantry (42)
     this.projColor=team==='player'?'#CCFFCC':'#FFBBAA';
   }
 

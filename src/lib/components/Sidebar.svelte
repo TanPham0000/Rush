@@ -50,6 +50,12 @@
   );
   // Only show wave counter on wave-based tutorial map (not eco / survival)
   const isWaveMap  = $derived(!engine?._mapDef?.enemyEco && engine?._mapDef?.mode !== 'survival');
+  // True when the selected building is a research building (queue = research items)
+  const selIsResearch = $derived(
+    $selected.length === 1 &&
+    ($selected[0] as any)?.type === 'Tech Lab' ||
+    ($selected.length === 1 && ($selected[0] as any)?.type === 'Armoury')
+  );
 </script>
 
 <aside>
@@ -326,15 +332,16 @@
   </div>
   {/if}
 
-  <!-- Build queue display -->
+  <!-- Build / research queue display -->
   {#if $selBuildingQueue.head !== null || $selBuildingQueue.rest.length > 0}
-  <div class="section queue-section">
-    <div class="section-label">PRODUCTION QUEUE</div>
+  <div class="section queue-section" class:research-queue={selIsResearch}>
+    <div class="section-label">{selIsResearch ? '🔬 RESEARCHING' : 'PRODUCTION QUEUE'}</div>
     {#if $selBuildingQueue.head}
     <div class="queue-head">
       <span class="queue-type">{$selBuildingQueue.head.type}</span>
       <div class="pbg" style="flex:1">
-        <div class="queue-fill" style="width:{$selBuildingQueue.head.pct * 100}%"></div>
+        <div class="queue-fill" class:research-fill={selIsResearch}
+             style="width:{$selBuildingQueue.head.pct * 100}%"></div>
       </div>
       <span class="queue-pct">{Math.round($selBuildingQueue.head.pct * 100)}%</span>
     </div>
@@ -573,9 +580,14 @@
   .req-note { color:#445533; font-size:7px; margin-top:2px; }
   .bm-used  { color:#665500; }
   .queue-section { background:#080E08; }
+  .queue-section.research-queue { background:#080C18; border-color:#1A3060; }
+  .queue-section.research-queue .section-label { color:#88AAFF; }
+  .queue-section.research-queue .queue-type { color:#AACCFF; }
+  .queue-section.research-queue .queue-pct  { color:#5588CC; }
   .queue-head { display:flex; align-items:center; gap:4px; margin-bottom:3px; }
   .queue-type { color:#AADDAA; font-size:8px; font-weight:bold; min-width:52px; }
   .queue-fill { height:100%; background:linear-gradient(90deg,#005522,#00EE55); transition:width 0.2s; }
+  .queue-fill.research-fill { background:linear-gradient(90deg,#002266,#2266FF); }
   .queue-pct  { color:#3A7A3A; font-size:7px; min-width:22px; text-align:right; }
   .queue-rest { display:flex; gap:2px; flex-wrap:wrap; }
   .queue-tag  { padding:1px 4px; background:#0D200D; border:1px solid #1E3A1E; color:#557755; font-size:7px; }

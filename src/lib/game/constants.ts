@@ -67,7 +67,7 @@ export const TRAIN_TIME: Record<string, number> = {
 export const UNIT_COST: Record<string, number> = {
   'Infantry':    100,
   'Grenadier':   100,
-  'Marksman':    175,
+  'Marksman':    220,
   'Tank':        400,
   'HeavyTank':   400,
   'Artillery':   550,

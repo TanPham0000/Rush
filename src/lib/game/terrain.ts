@@ -681,33 +681,53 @@ export class TerrainMap {
           c.fillText('✕ CANYON', cz.x+cz.w/2, cz.y+cz.h/2+4); c.textAlign='left';
         }
       } else {
-        // ── Dark volcanic rock cliff ───────────────────────
-        c.fillStyle = '#0E0C08'; c.fillRect(cz.x, cz.y, cz.w, cz.h);
-        const cg = c.createLinearGradient(cz.x, cz.y, cz.x + cz.w*0.6, cz.y + cz.h);
-        cg.addColorStop(0, '#1A1610'); cg.addColorStop(0.4, '#120E08');
-        cg.addColorStop(0.8, '#1C1810'); cg.addColorStop(1, '#0E0C06');
-        c.fillStyle = cg; c.fillRect(cz.x, cz.y, cz.w, cz.h);
-        c.strokeStyle = 'rgba(60,50,20,0.45)'; c.lineWidth = 1;
-        const step2 = 22;
-        for (let yi = cz.y + step2/2; yi < cz.y + cz.h; yi += step2) {
-          c.beginPath(); c.moveTo(cz.x, yi);
-          for (let xi = cz.x; xi <= cz.x+cz.w; xi += 16)
-            c.lineTo(xi, yi + Math.sin(xi*0.07+yi*0.04)*3);
+        // ── Organic rocky ridge (rounded, hill-themed) ────────
+        const rx = cz.x, ry = cz.y, rw = cz.w, rh = cz.h;
+        const rad = Math.min(rw, rh) * 0.42;  // large corner radius = pill shape
+
+        // Drop shadow
+        c.save();
+        c.shadowColor = 'rgba(0,0,0,0.55)'; c.shadowBlur = 14; c.shadowOffsetX = 6; c.shadowOffsetY = 6;
+        c.beginPath(); (c as any).roundRect(rx, ry, rw, rh, rad);
+        c.fillStyle = '#0E100A'; c.fill();
+        c.restore();
+
+        // Base rock fill — dark mossy stone
+        c.beginPath(); (c as any).roundRect(rx, ry, rw, rh, rad);
+        const cg = c.createLinearGradient(rx, ry, rx + rw*0.6, ry + rh);
+        cg.addColorStop(0,   '#1C2010'); cg.addColorStop(0.35, '#141808');
+        cg.addColorStop(0.7, '#1E221A'); cg.addColorStop(1,   '#111408');
+        c.fillStyle = cg; c.fill();
+
+        // Clip subsequent detail to the rounded shape
+        c.save();
+        c.beginPath(); (c as any).roundRect(rx, ry, rw, rh, rad); c.clip();
+
+        // Rock strata lines
+        c.strokeStyle = 'rgba(80,90,40,0.35)'; c.lineWidth = 1;
+        for (let yi = ry + 18; yi < ry + rh; yi += 22) {
+          c.beginPath(); c.moveTo(rx, yi);
+          for (let xi = rx; xi <= rx+rw; xi += 14)
+            c.lineTo(xi, yi + Math.sin(xi*0.08+yi*0.045)*2.5);
           c.stroke();
         }
-        c.strokeStyle='rgba(0,0,0,0.5)'; c.lineWidth=1.2;
-        const cc2 = Math.floor(cz.w/60);
-        for (let i=0; i<cc2; i++) {
-          const cx2=cz.x+(i+0.5)*(cz.w/cc2)+rnd(-20,20), cy0=cz.y+rnd(0,cz.h*0.3);
-          c.beginPath(); c.moveTo(cx2,cy0);
-          c.lineTo(cx2+rnd(-12,12),cy0+rnd(20,40));
-          c.lineTo(cx2+rnd(-18,18),cy0+rnd(50,80)); c.stroke();
+        // Lichen patches (mossy green spots)
+        for (let i = 0; i < Math.floor(rw/45); i++) {
+          const lx = rx + rnd(10, rw-10), ly = ry + rnd(10, rh-10);
+          const lr = rnd(6, 14);
+          c.beginPath(); c.ellipse(lx, ly, lr, lr*0.65, rnd(-1,1), 0, Math.PI*2);
+          c.fillStyle = 'rgba(50,70,25,0.45)'; c.fill();
         }
-        c.strokeStyle='rgba(80,70,30,0.55)'; c.lineWidth=2;
-        c.strokeRect(cz.x, cz.y, cz.w, cz.h);
-        if (cz.w > 120 && cz.h > 80) {
-          c.fillStyle='rgba(70,60,25,0.7)'; c.font='bold 8px "Courier New"'; c.textAlign='center';
-          c.fillText('✕ CLIFF', cz.x+cz.w/2, cz.y+cz.h/2+4); c.textAlign='left';
+        c.restore();
+
+        // Rounded border — mossy outline
+        c.beginPath(); (c as any).roundRect(rx, ry, rw, rh, rad);
+        c.strokeStyle = 'rgba(60,80,30,0.7)'; c.lineWidth = 2.5; c.stroke();
+
+        // RIDGE label centred
+        if (rh > 100) {
+          c.fillStyle = 'rgba(100,120,50,0.6)'; c.font = 'bold 8px "Courier New"'; c.textAlign = 'center';
+          c.fillText('▲ RIDGE', rx+rw/2, ry+rh/2+4); c.textAlign = 'left';
         }
       }
     }

@@ -1213,6 +1213,13 @@ export class Engine {
       if(cx>riverX-64&&cx<riverX+64)return false;
     }
     if(this._mapDef.theme===2&&this.terrain.inCityBlock(cx,cy))return false;
+    // ── Impassable cliff zones — can't build on ridgelines ────
+    if(this._mapDef.impassableZones){
+      const hw=d.w/2+8, hh=d.h/2+8;
+      for(const iz of this._mapDef.impassableZones){
+        if(cx>iz.x-hw&&cx<iz.x+iz.w+hw&&cy>iz.y-hh&&cy<iz.y+iz.h+hh)return false;
+      }
+    }
     // ── Power-zone check: must be within range of a ready CY or Power Plant ──
     const inPowerZone=this.buildings.some(b=>{
       if(b.team!=='player'||!b.isReady)return false;
