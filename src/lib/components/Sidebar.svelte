@@ -174,12 +174,12 @@
 
   <!-- Build -->
   <div class="section">
-    <div class="section-label">CONSTRUCT · P B F T K O</div>
+    <div class="section-label">CONSTRUCT · W B F T K O</div>
     <div class="btn-grid">
       <button class="btn" class:active={$buildMode==='Power Plant'}
         disabled={$credits<200||$gameState!=='playing'}
         onclick={() => engine?.enterBuild('Power Plant')}>
-        <span class="bn">Power Plant</span><span class="bc">200¢ [P]</span>
+        <span class="bn">Power Plant</span><span class="bc">200¢ [W]</span>
       </button>
       <button class="btn" class:active={$buildMode==='Barracks'}
         disabled={$credits<300||$gameState!=='playing'}
@@ -472,7 +472,7 @@
 
 <style>
   aside {
-    width: 200px; height: 600px;
+    width: 200px; height: 100%;
     background: #060A06; border-left: 2px solid #1A3A1A;
     color: #88CC88; display: flex; flex-direction: column;
     font-size: 11px; font-family: 'Courier New', Courier, monospace;

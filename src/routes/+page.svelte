@@ -15,11 +15,8 @@
   import { sound } from '$lib/game/sound';
   import type { Engine } from '$lib/game/engine';
 
-  const TOTAL_W = 1100, TOTAL_H = 652;
-
   let engine: Engine | null = $state(null);
   let minimapCanvas: HTMLCanvasElement | null = $state(null);
-  let wrapper: HTMLDivElement;
 
   // Menu state
   let menuMode    = $state<'campaign' | 'skirmish' | 'codex'>('campaign');
@@ -33,7 +30,7 @@
 
   function toggleMute() { muted = sound.toggleMute(); }
 
-  // Stats graph computed from history
+  // Stats graph
   const graphData = $derived.by(() => {
     const snaps: StatSnap[] = $statsHistory;
     if (snaps.length < 2) return null;
@@ -108,15 +105,6 @@
     },
   ];
 
-  function fitViewport() {
-    if (!wrapper) return;
-    // Scale to fill the window — allow upscaling up to 1.5× on large screens
-    const s  = Math.min(1.5, window.innerWidth / TOTAL_W, window.innerHeight / TOTAL_H);
-    const tx = Math.max(0, (window.innerWidth  - TOTAL_W * s) / 2);
-    const ty = Math.max(0, (window.innerHeight - TOTAL_H * s) / 2);
-    wrapper.style.transform = `translate(${tx}px,${ty}px) scale(${s})`;
-  }
-
   function startGame() {
     if (menuMode === 'codex') return;  // no-op from codex tab
     if (menuMode === 'campaign') {
@@ -165,11 +153,8 @@
   }
 
   onMount(() => {
-    fitViewport();
-    window.addEventListener('resize', fitViewport);
     window.addEventListener('keydown', onGlobalKey);
     return () => {
-      window.removeEventListener('resize', fitViewport);
       window.removeEventListener('keydown', onGlobalKey);
     };
   });
@@ -182,7 +167,7 @@
   const currentMapDef = $derived(MAPS[$campaignMap] ?? MAPS[0]);
 </script>
 
-<div id="wrapper" bind:this={wrapper}>
+<div id="wrapper">
 
   <!-- WAR TABLE HEADER -->
   <header>
@@ -428,9 +413,11 @@
       </div>
       <div class="menu-col">
         <div class="col-hdr">HOTKEYS</div>
-        <div class="ctrl-row"><span class="key">P/B/F</span><span>Plant / Barracks / Refinery</span></div>
-        <div class="ctrl-row"><span class="key">T/K</span><span>Turret / Tech Lab</span></div>
-        <div class="ctrl-row"><span class="key">A</span><span>Attack-move order</span></div>
+        <div class="ctrl-row"><span class="key">W/B/F</span><span>Power Plant / Barracks / Refinery</span></div>
+        <div class="ctrl-row"><span class="key">T/K/O</span><span>Turret / Tech Lab / Armoury</span></div>
+        <div class="ctrl-row"><span class="key">A</span><span>Select All Army</span></div>
+        <div class="ctrl-row"><span class="key">P</span><span>Select All Production</span></div>
+        <div class="ctrl-row"><span class="key">Q</span><span>Attack-move order</span></div>
         <div class="ctrl-row"><span class="key">S/G/R</span><span>Stop / Guard / Retreat</span></div>
         <div class="ctrl-row"><span class="key">ESC</span><span>Cancel build mode</span></div>
       </div>
@@ -595,10 +582,8 @@
 <style>
   /* ── WRAPPER ───────────────────────────────────────── */
   #wrapper {
-    position: fixed; top: 0; left: 0;
-    transform-origin: 0 0;
+    position: fixed; inset: 0;
     display: flex; flex-direction: column;
-    width: 1100px;
     filter: drop-shadow(0 0 32px rgba(0,180,60,0.18)) drop-shadow(0 0 6px rgba(0,100,40,0.4));
   }
 
@@ -647,6 +632,8 @@
   /* ── DISPLAY FRAME ─────────────────────────────────── */
   .display-frame {
     position: relative;
+    flex: 1; min-height: 0;
+    display: flex; flex-direction: column;
     border: 1px solid #1A3A1A; border-top: none;
     box-shadow: inset 0 0 40px rgba(0,180,60,0.04), 0 0 0 1px rgba(0,80,30,0.3);
   }
@@ -655,8 +642,8 @@
   .tick.tr { top: -1px; right: -1px; border-width: 2px 2px 0 0; }
   .tick.bl { bottom: -1px; left: -1px;  border-width: 0 0 2px 2px; }
   .tick.br { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
-  .game-row { display: flex; height: 600px; overflow: hidden; }
-  .canvas-wrap { position: relative; flex-shrink: 0; }
+  .game-row { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+  .canvas-wrap { position: relative; flex: 1; min-width: 0; overflow: hidden; }
 
   /* ── MINIMAP FLOAT (bottom-right of game canvas) ────── */
   .minimap-float {

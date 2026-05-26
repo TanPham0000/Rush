@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { Engine } from '$lib/game/engine';
-  import { VIEW_W, VIEW_H } from '$lib/game/constants';
 
   interface Props {
     onEngineReady?: (engine: Engine) => void;
@@ -39,10 +38,10 @@
     mouseScreenPos = screenPos(e);
     mouseWorldPos  = engine ? engine.screenToWorld(mouseScreenPos.x, mouseScreenPos.y) : mouseScreenPos;
 
-    // Edge scroll detection
+    // Edge scroll detection — uses engine's current viewport size
     const sx = mouseScreenPos.x, sy = mouseScreenPos.y;
-    edgeVx = sx < EDGE_ZONE ? -EDGE_SPEED : sx > VIEW_W - EDGE_ZONE ? EDGE_SPEED : 0;
-    edgeVy = sy < EDGE_ZONE ? -EDGE_SPEED : sy > VIEW_H - EDGE_ZONE ? EDGE_SPEED : 0;
+    edgeVx = sx < EDGE_ZONE ? -EDGE_SPEED : sx > engine.viewW - EDGE_ZONE ? EDGE_SPEED : 0;
+    edgeVy = sy < EDGE_ZONE ? -EDGE_SPEED : sy > engine.viewH - EDGE_ZONE ? EDGE_SPEED : 0;
     if (engine) engine.setCamVel(edgeVx, edgeVy);
   }
 
@@ -95,11 +94,12 @@
     if (k === 'ESCAPE') { engine.cancelBuild(); return; }
     if (k === 'S')      { engine.commandStop();   return; }
     if (k === 'G')      { engine.commandGuard();  return; }
-    if (k === 'A')      { engine.enterAttackMove(); return; }
+    // 'A' handled globally by +page.svelte (handleArmyKey)
+    // 'Q' handled globally by +page.svelte (enterAttackMove)
     if (k === 'R')      { engine.commandRetreat(); return; }
 
-    // Build hotkeys (won't fire if cursor is in sidebar)
-    if (k === 'P') { engine.enterBuild('Power Plant'); return; }
+    // Build hotkeys — 'W' for Power Plant (P is now Select All Production)
+    if (k === 'W') { engine.enterBuild('Power Plant'); return; }
     if (k === 'B') { engine.enterBuild('Barracks');    return; }
     if (k === 'F') { engine.enterBuild('Refinery');    return; }
     if (k === 'T') { engine.enterBuild('Turret');      return; }
@@ -125,6 +125,15 @@
     engine = new Engine(canvas);
     onEngineReady(engine);
 
+    // ── Resize observer — keeps canvas buffer = CSS display size ─
+    const ro = new ResizeObserver(entries => {
+      const entry = entries[0];
+      if (!entry) return;
+      const { width, height } = entry.contentRect;
+      if (width > 0 && height > 0) engine.resize(Math.round(width), Math.round(height));
+    });
+    ro.observe(canvas);
+
     let t = 0;
     const loop = (ts: number) => {
       t = ts / 1000;
@@ -148,6 +157,7 @@
     window.addEventListener('keyup',   onKeyUp);
 
     return () => {
+      ro.disconnect();
       cancelAnimationFrame(raf);
       engine.stop();
       window.removeEventListener('keydown', onKeyDown);
@@ -169,9 +179,8 @@
 <style>
   canvas {
     display: block;
+    width: 100%;
+    height: 100%;
     cursor: default;
-    width: 900px;
-    height: 600px;
-    flex-shrink: 0;
   }
 </style>

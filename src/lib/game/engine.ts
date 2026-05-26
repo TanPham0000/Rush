@@ -75,6 +75,10 @@ export class Engine {
   _buildMode:    BType|null=null;
   _commandMode:  'attack-move'|null=null;
 
+  // Viewport dimensions (updated dynamically on window resize)
+  viewW: number = VIEW_W;
+  viewH: number = VIEW_H;
+
   // Camera & zoom
   _camX:number=0; _camY:number=300; _zoom:number=1.0;
   _camVelX:number=0; _camVelY:number=0;
@@ -145,7 +149,7 @@ export class Engine {
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas=canvas; this.ctx=canvas.getContext('2d')!;
-    canvas.width=VIEW_W; canvas.height=VIEW_H;
+    canvas.width=this.viewW; canvas.height=this.viewH;
     const idx=get(campaignMap);
     this._campaignMapIdx=idx;
     this._mapDef=MAPS[idx]??MAPS[0];
@@ -153,6 +157,14 @@ export class Engine {
     this._ref={ terrain:this.terrain, addCredits:(n)=>this._addCredits(n), buildings:this.buildings, tibFields:this.tibFields, pUnits:this.pUnits };
     this._eRef={ terrain:this.terrain, addCredits:(n)=>{this._eCredits+=n;}, buildings:this.buildings, tibFields:this.tibFields, pUnits:this.pUnits };
     this._init();
+  }
+
+  // ── RESIZE ────────────────────────────────────────────────
+  resize(w:number,h:number){
+    if(w===this.viewW&&h===this.viewH)return;
+    this.viewW=w; this.viewH=h;
+    this.canvas.width=w; this.canvas.height=h;
+    this._clampCamera();
   }
 
   // ── COORDINATE CONVERSION ──────────────────────────────────
@@ -330,11 +342,11 @@ export class Engine {
       // Zoom out to show beach AND sea — shifted right so ocean is visible
       this._zoom = 0.62;
       this._camX = 280;
-      this._camY = clamp(pb.cy - VIEW_H/(2*this._zoom), 0, Math.max(0, MAP_H - VIEW_H/this._zoom));
+      this._camY = clamp(pb.cy - this.viewH/(2*this._zoom), 0, Math.max(0, MAP_H - this.viewH/this._zoom));
     } else if (!isSurvival && md.enemyEco) {
       // Center camera on player base so south-based maps start correctly
-      this._camX = clamp(pb.cx - VIEW_W/2, 0, Math.max(0, MAP_W - VIEW_W));
-      this._camY = clamp(pb.cy - VIEW_H/2, 0, Math.max(0, MAP_H - VIEW_H));
+      this._camX = clamp(pb.cx - this.viewW/2, 0, Math.max(0, MAP_W - this.viewW));
+      this._camY = clamp(pb.cy - this.viewH/2, 0, Math.max(0, MAP_H - this.viewH));
     }
 
     // ── Capture nodes ─────────────────────────────────────────
@@ -379,8 +391,8 @@ export class Engine {
   }
 
   _clampCamera(){
-    const maxCamX=Math.max(0,MAP_W-VIEW_W/this._zoom);
-    const maxCamY=Math.max(0,MAP_H-VIEW_H/this._zoom);
+    const maxCamX=Math.max(0,MAP_W-this.viewW/this._zoom);
+    const maxCamY=Math.max(0,MAP_H-this.viewH/this._zoom);
     this._camX=clamp(this._camX,0,maxCamX); this._camY=clamp(this._camY,0,maxCamY);
   }
 
@@ -532,8 +544,8 @@ export class Engine {
 
   // ── MINIMAP NAVIGATION ───────────────────────────────────
   centerCameraOn(wx:number,wy:number){
-    this._camX=wx-VIEW_W/(2*this._zoom);
-    this._camY=wy-VIEW_H/(2*this._zoom);
+    this._camX=wx-this.viewW/(2*this._zoom);
+    this._camY=wy-this.viewH/(2*this._zoom);
     this._clampCamera();
   }
 
@@ -1558,7 +1570,7 @@ export class Engine {
     }
 
     // Fog
-    const viewWorldW=VIEW_W/zoom, viewWorldH=VIEW_H/zoom;
+    const viewWorldW=this.viewW/zoom, viewWorldH=this.viewH/zoom;
     const cs=Math.floor(camX/FOG_CELL), ce=Math.ceil((camX+viewWorldW)/FOG_CELL)+1;
     const rs=Math.floor(camY/FOG_CELL), re=Math.ceil((camY+viewWorldH)/FOG_CELL)+1;
     for(let row=rs;row<=re;row++){
@@ -1601,12 +1613,12 @@ export class Engine {
 
     // Screen-space elements
     ctx.setTransform(1,0,0,1,0,0);
-    const vig=ctx.createRadialGradient(VIEW_W*0.5,VIEW_H*0.5,VIEW_H*0.28,VIEW_W*0.5,VIEW_H*0.5,VIEW_H*0.82);
+    const vig=ctx.createRadialGradient(this.viewW*0.5,this.viewH*0.5,this.viewH*0.28,this.viewW*0.5,this.viewH*0.5,this.viewH*0.82);
     vig.addColorStop(0,'rgba(0,0,0,0)'); vig.addColorStop(1,'rgba(0,5,2,0.62)');
-    ctx.fillStyle=vig; ctx.fillRect(0,0,VIEW_W,VIEW_H);
+    ctx.fillStyle=vig; ctx.fillRect(0,0,this.viewW,this.viewH);
 
     const M=22; ctx.lineWidth=2; ctx.strokeStyle='rgba(0,238,85,0.9)'; ctx.shadowBlur=10; ctx.shadowColor='#00EE55';
-    for(const[cx2,cy2,dx,dy] of[[0,0,1,1],[VIEW_W,0,-1,1],[VIEW_W,VIEW_H,-1,-1],[0,VIEW_H,1,-1]] as [number,number,number,number][]){
+    for(const[cx2,cy2,dx,dy] of[[0,0,1,1],[this.viewW,0,-1,1],[this.viewW,this.viewH,-1,-1],[0,this.viewH,1,-1]] as [number,number,number,number][]){
       ctx.beginPath(); ctx.moveTo(cx2+dx*M,cy2); ctx.lineTo(cx2,cy2); ctx.lineTo(cx2,cy2+dy*M); ctx.stroke();
     }
     ctx.shadowBlur=0;
@@ -1653,7 +1665,7 @@ export class Engine {
     for(const b of this.buildings){mctx.fillStyle=b.team==='player'?C.allyAccent:(b.type==='War Factory'?'#FF0000':C.enemyAccent);mctx.fillRect(b.cx*sx-3,b.cy*sy-3,6,6);}
     for(const u of this.pUnits){mctx.beginPath();mctx.arc(u.x*sx,u.y*sy,2.5,0,Math.PI*2);mctx.fillStyle=C.allyLight;mctx.fill();}
     for(const u of this.eUnits){mctx.beginPath();mctx.arc(u.x*sx,u.y*sy,2.5,0,Math.PI*2);mctx.fillStyle=C.enemyLight;mctx.fill();}
-    const vpX=this._camX*sx,vpY=this._camY*sy,vpW=(VIEW_W/this._zoom)*sx,vpH=(VIEW_H/this._zoom)*sy;
+    const vpX=this._camX*sx,vpY=this._camY*sy,vpW=(this.viewW/this._zoom)*sx,vpH=(this.viewH/this._zoom)*sy;
     mctx.strokeStyle='rgba(0,255,80,0.7)'; mctx.lineWidth=1.5; mctx.strokeRect(vpX,vpY,vpW,vpH);
     mctx.strokeStyle='rgba(0,255,80,0.3)'; mctx.lineWidth=1; mctx.strokeRect(0,0,mw,mh);
   }
