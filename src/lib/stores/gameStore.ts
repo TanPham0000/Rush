@@ -57,6 +57,12 @@ export const enemiesKilled = writable(0);
 export const unitsLost     = writable(0);
 export const unitsProduced = writable(0);
 
+// ── Global production queue count ────────────────────────────
+// Total units queued across ALL player buildings (not just the selected one)
+export interface GlobalQueueEntry { type: string; buildingType: string }
+export const totalQueueCount   = writable(0);
+export const globalQueueItems  = writable<GlobalQueueEntry[]>([]);
+
 // ── Build queue (selected building) ──────────────────────────
 export interface QueueState {
   head: { type: string; pct: number } | null;

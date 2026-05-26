@@ -147,6 +147,10 @@
       engine?.togglePause();
     } else if (e.key === 'm' || e.key === 'M') {
       toggleMute();
+    } else if ($gameState === 'playing' && !$paused) {
+      if (e.key === 'a' || e.key === 'A') { e.preventDefault(); engine?.handleArmyKey(); }
+      if (e.key === 'p' || e.key === 'P') { e.preventDefault(); engine?.selectAllProduction(); }
+      if (e.key === 'q' || e.key === 'Q') { e.preventDefault(); engine?.enterAttackMove(); }
     }
   }
 

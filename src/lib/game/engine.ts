@@ -30,6 +30,7 @@ import {
   statsHistory, gameTimeElapsed, campaignMap,
   paused as pausedStore,
   survivalMode, survivalTimeLeft, survivalTotal,
+  totalQueueCount, globalQueueItems,
 } from '$lib/stores/gameStore';
 import { sound } from './sound';
 import { get } from 'svelte/store';
@@ -728,8 +729,19 @@ export class Engine {
   onRightClick(pos:{x:number;y:number}){
     if(this._buildMode){this.cancelBuild();return;}
     if(this._commandMode==='attack-move'){this.commandAttackMove(pos);return;}
-    const selBld=this._selected.find(e=>e instanceof Building&&e.team==='player') as Building|undefined;
-    if(selBld){selBld.rallyPoint={x:pos.x,y:pos.y};this.setStatus('Rally point set','success');this._syncStores();return;}
+    const selBlds=this._selected.filter(e=>e instanceof Building&&e.team==='player') as Building[];
+    if(selBlds.length){
+      // Set rally on ALL selected production buildings at once
+      const prodBlds=selBlds.filter(b=>b.type==='Barracks'||b.type==='War Factory');
+      if(prodBlds.length){
+        prodBlds.forEach(b=>b.rallyPoint={x:pos.x,y:pos.y});
+        this.setStatus(prodBlds.length>1?`Rally set for ${prodBlds.length} buildings`:'Rally point set','success');
+      } else {
+        selBlds[0].rallyPoint={x:pos.x,y:pos.y};
+        this.setStatus('Rally point set','success');
+      }
+      this._syncStores(); return;
+    }
     const movers=this._selected.filter(e=>e instanceof Unit&&e.team==='player') as Unit[];
     if(!movers.length)return;
     let target:Entity|null=null;
@@ -743,6 +755,38 @@ export class Engine {
       sound.moveOrder();
       this._moveInd={x:pos.x,y:pos.y,t:0.7};
     }
+  }
+
+  // ── SELECT-ALL HELPERS ────────────────────────────────────
+
+  /** A key — context-sensitive: attack-move if units selected, else select all army */
+  handleArmyKey(){
+    const units=this._selected.filter(e=>e instanceof Unit&&e.team==='player');
+    if(units.length>0) this.enterAttackMove(); else this.selectAllArmy();
+  }
+
+  /** A — select every living player combat unit (excludes harvesters) */
+  selectAllArmy(){
+    this._deselect();
+    const army=this.pUnits.filter(u=>u.isAlive()&&!(u instanceof Harvester));
+    if(!army.length)return;
+    army.forEach(u=>{u.selected=true;this._selected.push(u);});
+    sound.unitSelected();
+    this.setStatus(`${army.length} unit${army.length>1?'s':''} selected`);
+    this._syncStores();
+  }
+
+  /** P — select all ready player Barracks + War Factories */
+  selectAllProduction(){
+    this._deselect();
+    const prods=this.buildings.filter(b=>
+      b.team==='player'&&b.isAlive()&&
+      (b.type==='Barracks'||b.type==='War Factory')
+    );
+    if(!prods.length)return this.setStatus('No production buildings!','warn');
+    prods.forEach(b=>{b.selected=true;this._selected.push(b);});
+    this.setStatus(`${prods.length} production building${prods.length>1?'s':''} selected`);
+    this._syncStores();
   }
 
   // ── COMMANDS ──────────────────────────────────────────────
@@ -1668,6 +1712,17 @@ export class Engine {
     const allResearching:string[]=[];
     for(const rq of this._researchQueues.values()) allResearching.push(...rq.map(r=>r.key));
     researchingKeys.set(allResearching);
+    // Global production queue — total units in training across all buildings
+    let gTotal=0;
+    const gItems:{type:string;buildingType:string}[]=[];
+    for(const[bldId,q] of this._queues){
+      if(!q.length)continue;
+      const b=this.buildings.find(b=>b.id===bldId);
+      const bType=b?.type??'';
+      for(const qi of q){gItems.push({type:qi.type,buildingType:bType});gTotal++;}
+    }
+    totalQueueCount.set(gTotal);
+    globalQueueItems.set(gItems);
     captureNodesState.set(this.captureNodes.map(n=>({label:n.label,team:n.team,progress:n.progress,isCenter:n.isCenter,isBlackMarket:n.isBlackMarket,isRadar:n.isRadar,isBeachGun:n.isBeachGun,isPark:n.isPark,isEngineer:n.isEngineer,holdTimer:n.holdTimer})));
     const center=this.captureNodes.find(n=>n.isCenter);
     holdProgress.set(center?center.holdTimer:0);

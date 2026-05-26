@@ -11,6 +11,7 @@
     selBuildingQueue, captureNodesState, holdProgress,
     upgrades, blackMarketCaptured, blackMarketAbilities,
     hasArmoury, selHasArmoury, researchingKeys,
+    totalQueueCount, globalQueueItems,
   } from '$lib/stores/gameStore';
   import { HOLD_WIN_TIME, UPGRADES, ARMOURY_UPGRADES } from '$lib/game/constants';
   import { survivalTimeLeft } from '$lib/stores/gameStore';
@@ -163,6 +164,14 @@
     <span class="k-lost">{$unitsLost} LOST ◀</span>
   </div>
 
+  <!-- Quick-select row: always visible during play -->
+  {#if $gameState === 'playing'}
+  <div class="select-row">
+    <button class="sel-btn army-sel" onclick={() => engine?.selectAllArmy()} title="Select all combat units (A)">[A] ALL ARMY</button>
+    <button class="sel-btn prod-sel" onclick={() => engine?.selectAllProduction()} title="Select all production buildings (P)">[P] ALL PROD</button>
+  </div>
+  {/if}
+
   <!-- Build -->
   <div class="section">
     <div class="section-label">CONSTRUCT · P B F T K O</div>
@@ -218,10 +227,10 @@
       <span class="bn">{$upgrades.includes('Grenadier') ? 'Grenadier★' : 'Infantry'}</span>
       <span class="bc">100¢ · {$upgrades.includes('Grenadier') ? '11s · splash' : '8s'}</span>
     </button>
-    <button class="btn full mrk-btn" disabled={$credits<175||$gameState!=='playing'}
+    <button class="btn full mrk-btn" disabled={$credits<220||$gameState!=='playing'}
       onclick={() => engine?.trainMarksman()}
       style="margin-top:3px">
-      <span class="bn">Marksman</span><span class="bc">175¢ · 14s · long range sniper</span>
+      <span class="bn">Marksman</span><span class="bc">220¢ · 14s · long-range sniper</span>
     </button>
     <button class="btn full scout-btn" disabled={$credits<80||$gameState!=='playing'}
       onclick={() => engine?.trainScout()}
@@ -356,6 +365,18 @@
   </div>
   {/if}
 
+  <!-- Global production queue summary — always visible when training is active -->
+  {#if $totalQueueCount > 0}
+  <div class="section global-q-section">
+    <div class="section-label">⚙ IN TRAINING · {$totalQueueCount} unit{$totalQueueCount !== 1 ? 's' : ''}</div>
+    <div class="queue-rest">
+      {#each $globalQueueItems as item}
+      <span class="queue-tag" class:gq-wf={item.buildingType === 'War Factory'}>{item.type}</span>
+      {/each}
+    </div>
+  </div>
+  {/if}
+
   <!-- Black Market Abilities -->
   {#if $blackMarketCaptured}
   <div class="section bm-section">
@@ -395,7 +416,7 @@
       <button class="cmd-btn" onclick={() => engine?.commandGuard()}>[G] Guard</button>
     </div>
     <div class="cmd-row" style="margin-top:3px">
-      <button class="cmd-btn atk" onclick={() => engine?.enterAttackMove()}>[A] Atk-Move</button>
+      <button class="cmd-btn atk" onclick={() => engine?.enterAttackMove()}>[Q] Atk-Move</button>
       <button class="cmd-btn ret" onclick={() => engine?.commandRetreat()}>[R] Retreat</button>
     </div>
   </div>
@@ -434,9 +455,10 @@
   <!-- Hotkeys -->
   <div class="hotkeys">
     ESC Cancel · RMB Move/Atk/Rally<br>
-    S Stop · G Guard · A Atk-Move · R Retreat<br>
+    S Stop · G Guard · Q Atk-Move · R Retreat<br>
+    A All Army · P All Prod (buildings)<br>
     ↑↓←→ Pan · Scroll Zoom · DRAG Select<br>
-    P/B/F/T/K Build · M Mute/Unmute
+    Build: P/B/F/T/K/O · M Mute
   </div>
 
   <!-- Status -->
@@ -613,5 +635,16 @@
   .status-bar.warn    { color:#FFAA00; }
   .status-bar.error   { color:#FF3333; }
   .status-bar.success { color:#33FF88; }
+  /* ── Quick-select row ─────────────────────────── */
+  .select-row { display:flex; gap:3px; padding:4px 10px; border-bottom:1px solid #1A2E1A; background:#090D09; }
+  .sel-btn { flex:1; padding:4px 3px; font-family:inherit; font-size:8px; font-weight:bold; letter-spacing:0.5px; cursor:pointer; border:1px solid; transition:background 0.08s, border-color 0.08s; }
+  .army-sel { background:#0D1F0D; color:#88FF88; border-color:#1E5A1E; }
+  .army-sel:hover { background:#153A15; border-color:#44BB44; color:#CCFFCC; }
+  .prod-sel { background:#0D1A2D; color:#88AAFF; border-color:#1A3A6A; }
+  .prod-sel:hover { background:#152240; border-color:#4466BB; color:#CCDDFF; }
+  /* ── Global training queue ───────────────────── */
+  .global-q-section { background:#0A100A; border-color:#1A3A1A; }
+  .global-q-section .section-label { color:#33AA66; }
+  .queue-tag.gq-wf { background:#0D1A0D; border-color:#2A5A2A; color:#88FF88; }
   @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
 </style>
