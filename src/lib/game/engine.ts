@@ -167,6 +167,11 @@ export class Engine {
     this._clampCamera();
   }
 
+  /** Two-finger pan: dx/dy are canvas-buffer pixels (already scaled from CSS px) */
+  panCamera(dx:number,dy:number){
+    this._camX+=dx/this._zoom; this._camY+=dy/this._zoom; this._clampCamera();
+  }
+
   // ── COORDINATE CONVERSION ──────────────────────────────────
   screenToWorld(sx:number,sy:number){ return{x:sx/this._zoom+this._camX,y:sy/this._zoom+this._camY}; }
 

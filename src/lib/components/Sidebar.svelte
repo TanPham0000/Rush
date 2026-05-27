@@ -647,4 +647,14 @@
   .global-q-section .section-label { color:#33AA66; }
   .queue-tag.gq-wf { background:#0D1A0D; border-color:#2A5A2A; color:#88FF88; }
   @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  /* ── Touch-device adjustments ────────────────── */
+  @media (pointer: coarse) {
+    .btn     { padding: 8px 6px; font-size: 10px; min-height: 38px; }
+    .cmd-btn { padding: 8px 4px; font-size: 10px; min-height: 38px; }
+    .sel-btn { padding: 8px 6px; font-size: 9px;  min-height: 38px; }
+    .section { padding: 7px 8px; }
+    .section-label { font-size: 8px; margin-bottom: 7px; }
+    .hotkeys { display: none; }   /* reclaim vertical space on mobile */
+  }
 </style>

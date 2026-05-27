@@ -174,6 +174,15 @@
 
 <div id="wrapper">
 
+  <!-- Portrait-mode guard — CSS-only, shown only on coarse-pointer portrait devices -->
+  <div class="rotate-overlay" aria-hidden="true">
+    <div class="rotate-inner">
+      <div class="rotate-icon">⟳</div>
+      <div class="rotate-text">ROTATE DEVICE</div>
+      <div class="rotate-sub">RUSH requires landscape mode</div>
+    </div>
+  </div>
+
   <!-- WAR TABLE HEADER -->
   <header>
     <div class="hd-left">
@@ -1020,6 +1029,44 @@
   }
   .menu-disclaimer p { margin: 3px 0; }
   .menu-disclaimer p:first-child { color: #669966; font-weight: bold; }
+
+  /* ── PORTRAIT-MODE OVERLAY ─────────────────────────── */
+  .rotate-overlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 9999;
+    background: #030803;
+    flex-direction: column; align-items: center; justify-content: center;
+    font-family: 'Courier New', monospace;
+    pointer-events: none;
+  }
+  @media (orientation: portrait) and (pointer: coarse) {
+    .rotate-overlay { display: flex; pointer-events: auto; }
+  }
+  .rotate-icon {
+    font-size: 56px;
+    color: #44AA44;
+    animation: spin90 1.6s ease-in-out infinite;
+    margin-bottom: 20px;
+  }
+  .rotate-text {
+    font-size: 18px;
+    font-weight: bold;
+    letter-spacing: 6px;
+    color: #88FF88;
+    margin-bottom: 8px;
+  }
+  .rotate-sub {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: #336633;
+  }
+  @keyframes spin90 {
+    0%   { transform: rotate(0deg);   opacity: 1; }
+    40%  { transform: rotate(90deg);  opacity: 1; }
+    50%  { transform: rotate(90deg);  opacity: 0.4; }
+    90%  { transform: rotate(0deg);   opacity: 0.4; }
+    100% { transform: rotate(0deg);   opacity: 1; }
+  }
 
   /* ── RESPONSIVE ─────────────────────────────────────── */
   /* Compact menu on narrow viewports (phone landscape / small tablets) */
