@@ -155,7 +155,7 @@ export class Engine {
     this._mapDef=MAPS[idx]??MAPS[0];
     this.terrain=new TerrainMap(this._mapDef.theme, this._mapDef.impassableZones??[]);
     this._ref={ terrain:this.terrain, addCredits:(n)=>this._addCredits(n), buildings:this.buildings, tibFields:this.tibFields, pUnits:this.pUnits };
-    this._eRef={ terrain:this.terrain, addCredits:(n)=>{this._eCredits+=n;}, buildings:this.buildings, tibFields:this.tibFields, pUnits:this.pUnits };
+    this._eRef={ terrain:this.terrain, addCredits:(n)=>{this._eCredits+=n*1.15;}, buildings:this.buildings, tibFields:this.tibFields, pUnits:this.pUnits };
     this._init();
   }
 
@@ -201,7 +201,7 @@ export class Engine {
     this._ref.onKill=(killer,victim)=>{ /* veterancy handled in Projectile */ };
     this._ref.onExplosion=(x,y,r)=>{ this._boom(x,y,'enemy'); };
     // Enemy eco ref (addCredits goes to _eCredits)
-    if(!this._eRef) this._eRef={ terrain:this.terrain, addCredits:(n)=>{this._eCredits+=n;}, buildings:this.buildings, tibFields:this.tibFields, pUnits:this.pUnits };
+    if(!this._eRef) this._eRef={ terrain:this.terrain, addCredits:(n)=>{this._eCredits+=n*1.15;}, buildings:this.buildings, tibFields:this.tibFields, pUnits:this.pUnits };
     else { this._eRef.terrain=this.terrain; this._eRef.buildings=this.buildings; this._eRef.tibFields=this.tibFields; this._eRef.pUnits=this.pUnits; }
 
     const pb=md.playerBase;
@@ -1289,8 +1289,8 @@ export class Engine {
   // ── ENEMY ECO AI ──────────────────────────────────────────
   _tickEcoAI(dt:number){
     const md=this._mapDef;
-    // Passive enemy income (slightly less than player base to make eco meaningful)
-    this._eCredits+=10*dt;
+    // Passive income — 15% handicap boost over base rate (11.5 vs ~10/s for player)
+    this._eCredits+=11.5*dt;
 
     // Build decision timer
     this._eBuildTimer-=dt;
@@ -1349,16 +1349,20 @@ export class Engine {
       }
     }
 
-    // ── Enemy harvester respawn: free one after 25s with no harvesters ──
+    // ── Harvester management: 1 per ready Refinery, up to 3 total ──────────
+    const eRefs=this.buildings.filter(b=>b.type==='Refinery'&&b.team==='enemy'&&b.isReady);
     const eHarvs=this.eUnits.filter(u=>u instanceof Harvester&&u.isAlive());
-    const eRefB=this.buildings.find(b=>b.type==='Refinery'&&b.team==='enemy'&&b.isReady);
-    if(eRefB&&eHarvs.length===0){
+    const harvTarget=Math.min(eRefs.length,3);  // max 3 harvesters
+    if(eRefs.length>0&&eHarvs.length<harvTarget){
       this._eNoHarvTimer+=dt;
-      if(this._eNoHarvTimer>=25&&this._eRef){
-        const eh=new Harvester(eRefB.cx+80,eRefB.cy,this._eRef,'enemy');
+      const spawnDelay=eHarvs.length===0?12:22;  // 12s if all gone (emergency), 22s for extras
+      if(this._eNoHarvTimer>=spawnDelay&&this._eRef){
+        // Spawn from the refinery that currently has no harvester nearby (rotate by count)
+        const spawnRef=eRefs[eHarvs.length%eRefs.length]??eRefs[0];
+        const eh=new Harvester(spawnRef.cx+rnd(60,100),spawnRef.cy+rnd(-40,40),this._eRef,'enemy');
         this.eUnits.push(eh);
         this._eNoHarvTimer=0;
-        this.setStatus('Enemy received emergency harvester','warn');
+        if(eHarvs.length===0)this.setStatus('Enemy received emergency harvester','warn');
       }
     } else {
       this._eNoHarvTimer=0;
@@ -1386,10 +1390,25 @@ export class Engine {
         if(ok)return;
       }
     }
-    // 2. Refinery (needs 10 power, gives harvester income)
+    // 2. First Refinery (needs 10 power, gives harvester income)
     if(!hasAny('Refinery')&&ePower>=10){
       if(this._eCredits>=BDEF['Refinery'].cost){
         const ok=this._enemyPlace('Refinery',eb.cx+rnd(-160,160),eb.cy+rnd(-100,100));
+        if(ok)return;
+      }
+    }
+    // 2b. Second Refinery — eco expansion after Barracks is up (90s gate)
+    const refCount=eBlds.filter(b=>b.type==='Refinery').length;
+    if(refCount===1&&hasReady('Refinery')&&hasReady('Barracks')&&this._gameTime>90&&ePower>=10){
+      if(this._eCredits>=BDEF['Refinery'].cost+120){  // keep buffer so we can still train
+        const ok=this._enemyPlace('Refinery',eb.cx+rnd(-220,220),eb.cy+rnd(-140,140));
+        if(ok)return;
+      }
+    }
+    // 2c. Third Refinery — late-game eco (240s gate), caps eco investment
+    if(refCount===2&&hasReady('Barracks')&&this._gameTime>240&&ePower>=10){
+      if(this._eCredits>=BDEF['Refinery'].cost+200){
+        const ok=this._enemyPlace('Refinery',eb.cx+rnd(-240,240),eb.cy+rnd(-160,160));
         if(ok)return;
       }
     }
